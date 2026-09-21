@@ -43,7 +43,7 @@ export interface PluginsCommandDependencies extends PluginsCommandOverrides {
   userConfigPath?: string;
 }
 
-/** `zcode plugins` 子命令专属旗标；由 run.ts 的全局解析器收集后原样透传。 */
+/** `sando plugins` 子命令专属旗标；由 run.ts 的全局解析器收集后原样透传。 */
 export interface PluginsCommandFlags {
   all?: boolean;
   available?: boolean;

@@ -299,15 +299,15 @@ export const OFFICIAL_PLUGIN_DEFINITIONS: readonly OfficialPluginDefinition[] = 
     listing: {
       author: ZAI_AUTHOR,
       category: "utilities",
-      displayName: "ZCode Guide",
+      displayName: "Sando Guide",
       displayName_i18n: { "zh-CN": "ZCode 使用指南" },
       icon: `${OFFICIAL_PLUGIN_ASSETS_BASE_URL}/zcode-guide/icon.png`,
       description_i18n: {
         "zh-CN": "提供 ZCode 配置指南与插件、技能、MCP、命令和钩子诊断。",
       },
       examplePrompts: [
-        "How do I configure MCP servers in ZCode?",
-        "Diagnose my current ZCode setup",
+        "How do I configure MCP servers in Sando?",
+        "Diagnose my current Sando setup",
       ],
       examplePrompts_i18n: {
         "zh-CN": ["ZCode 里怎么配置 MCP 服务器？", "帮我诊断当前的 ZCode 配置"],

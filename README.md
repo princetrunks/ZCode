@@ -1,3 +1,5 @@
+> **This is Sando, ShrineTech's fork of ZCode.** See [README-SANDO.md](README-SANDO.md). Upstream README follows.
+
 # ZCode
 
 <div align="center">

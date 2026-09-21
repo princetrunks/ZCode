@@ -2,8 +2,9 @@
   "name": "@zcode/cli",
   "version": "0.1.0",
   "private": true,
-  "description": "Main CLI application for zcode",
+  "description": "Sando — ShrineTech's coding-agent harness (fork of ZCode)",
   "bin": {
+    "sando": "./dist/zcode.cjs",
     "zcode": "./dist/zcode.cjs"
   },
   "files": [
