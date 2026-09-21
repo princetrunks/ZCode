@@ -1,0 +1,20 @@
+{
+  "name": "shrinetech-planner",
+  "version": "0.1.0",
+  "description": "ShrineTech Project Planner inside Sando: projects, tasks, time, invoices, the Overseer's render / decide / train / run_agent tools, sprites and Oanda — over the Planner's MCP endpoint.",
+  "author": { "name": "ShrineTech" },
+  "license": "Proprietary",
+  "skills": "skills",
+  "commands": "commands",
+  "mcpServers": {
+    "shrinetech-planner": {
+      "type": "http",
+      "url": "${user_config.planner_url}/mcp",
+      "headers": { "Authorization": "Bearer ${user_config.planner_token}" }
+    }
+  },
+  "userConfig": {
+    "planner_url": { "type": "string", "default": "https://projects.shrinetech.io", "description": "Planner origin (no trailing slash). On the forge use the Tailscale address of the Mac." },
+    "planner_token": { "type": "string", "sensitive": true, "description": "Planner JWT (POST /api/auth/login). 365-day tokens." }
+  }
+}
