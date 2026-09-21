@@ -10,7 +10,7 @@ export const zhCN: ZCodeCopy = {
     help: (version) => `zcode ${version}
 
 用法:
-  zcode [command] [options]
+  sando [command] [options]
 
 不传 command 时，zcode 会打开全屏 TUI。
 

@@ -10,9 +10,9 @@ export const enUS: ZCodeCopy = {
     help: (version) => `zcode ${version}
 
 Usage:
-  zcode [command] [options]
+  sando [command] [options]
 
-With no command, zcode opens the full-screen TUI.
+With no command, sando opens the full-screen TUI.
 
 Commands:
   app-server Run the ZCode Protocol stdio app server
