@@ -446,7 +446,7 @@ async function bootstrapWebApp() {
       onClose: () => {},
     });
     const platform = createWebPlatform();
-    document.title = "ZCode - Web + Server";
+    document.title = "Sando";
 
     root.render(
       <AppErrorBoundary>
