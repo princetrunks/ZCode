@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "shrinetech-planner": {
+      "type": "http",
+      "url": "https://projects.shrinetech.io/mcp",
+      "headers": {
+        "Authorization": "Bearer <PLANNER_JWT from POST /api/auth/login>"
+      }
+    }
+  }
+}
