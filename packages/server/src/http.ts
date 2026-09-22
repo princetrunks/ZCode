@@ -47,11 +47,19 @@ function wrapWebSocket(ws: WebSocket): ISocket {
     const buf = Buffer.isBuffer(raw) ? raw : Buffer.from(raw as ArrayBuffer);
     onData.fire(VSBuffer.wrap(new Uint8Array(buf)));
   });
+  // Sando keepalive (2026-09-22): Cloudflare (sando.shrinetech.io) closes a WebSocket after ~100 s without traffic, and
+  // the web client sent nothing while the user read a reply — the next message went out on a dead socket (measured:
+  // idle socket closed at 125 s, 0 server pings). A protocol ping every 25 s keeps the tunnel open; browsers pong it.
+  const keepalive = setInterval(() => {
+    try { if (ws.readyState === ws.OPEN) ws.ping(); } catch { /* socket already gone */ }
+  }, 25_000);
   ws.on("close", () => {
+    clearInterval(keepalive);
     onClose.fire();
     onEnd.fire();
   });
   ws.on("error", () => {
+    clearInterval(keepalive);
     onClose.fire();
     onEnd.fire();
   });
