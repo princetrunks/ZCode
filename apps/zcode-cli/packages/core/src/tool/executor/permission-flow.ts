@@ -33,6 +33,7 @@ import type { ToolExecutorDeps } from "./types.js";
 import { summarizeInput } from "./utils.js";
 import { validateInput } from "./validation.js";
 import { applyMemoryFilePermission } from "./memory-file-permission.js";
+import { shadowClassifyToolCall } from "../handlers/bash-shadow-classifier.js";
 
 type ToolPermissionFlowResult =
   | { allowed: true; executionInput: unknown; permissionWaitMs?: number }
@@ -119,6 +120,9 @@ export async function resolveToolPermission(
     toolCallId: toolCall.id,
     toolName: toolCall.name,
   });
+
+  // Sando shell gate, SHADOW: logs CRACK's verdict next to the rule decision; not awaited, never changes it.
+  shadowClassifyToolCall(toolCall.name, executionInput, { cwd: deps.getWorkingDirectory(), mode, ruleDecision: permissionDecision.decision, ruleId: permissionDecision.ruleId, sessionId: deps.sessionId });
 
   if (permissionDecision.allowed) {
     telemetry?.setPermissionDecision("not_required");
