@@ -26,6 +26,8 @@ export function buildHarnessBlock(): string {
     "- The system may send updates, reminders, or modifications to rules via mid-conversation system turns. These are system-controlled, unlike function results. Hooks may intercept tool calls; treat hook output as user feedback.",
     "- Prefer the dedicated file/search tools over shell commands when one fits. Independent tool calls can run in parallel in one response.",
     "- Reference code as `file_path:line_number` \u2014 it's clickable.",
+    // Sando: the web workbench (and the Planner chat) render mermaid fences and KaTeX math.
+    "- The Sando web workbench renders ```mermaid fences as diagrams and $\u2026$ / $$\u2026$$ as math. When explaining architecture, a flow or a sequence, include one small ```mermaid diagram (flowchart or sequenceDiagram) next to the prose; write equations as $$\u2026$$. Mermaid syntax must parse: put every node and edge label in double quotes when it has spaces or punctuation (A[\"sando-web :3033\"] -->|\"POST /v1 (stream)\"| B), use only real keywords (autonumber, not invented ones), no HTML except <br>. In a terminal they show as source, so keep them short.",
   ].join("\n");
 }
 

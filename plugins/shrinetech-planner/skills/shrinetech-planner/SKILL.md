@@ -37,3 +37,10 @@ description: How to use the ShrineTech Project Planner tools (mcp shrinetech-pla
 - Plan → build: `get_task` → `run_agent` (engine `zcode` for local, `claude` for cloud when allowed) → `add_note` + `update_task_status`.
 - Danielle stills (recipe of record): `generate_image` style `qwen21`, prompt starting with the H3 descriptor prose, `loras:
   ["danielle_qi21_v6b.safetensors:1.0"]`, one reference sheet in `reference_images` (`ref_d9_3_512.jpg`).
+
+## Diagrams and math
+
+Sando's web workbench and the Planner's Chat / Lily pages render a ```mermaid fence as a diagram and `$…$` / `$$…$$` as KaTeX.
+When a reply explains architecture, a flow or a sequence (forge modes, request paths, agent hand-offs), add one small
+```mermaid diagram (`flowchart TD` or `sequenceDiagram`) next to the prose; write formulas as `$$…$$`. Voice replies drop
+these blocks before TTS, so the spoken text must still make sense without them.
