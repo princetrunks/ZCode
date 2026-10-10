@@ -3,6 +3,7 @@ import { cn } from "@/components/lib/utils.js";
 import {
   ArrowLeftIcon,
   ArrowRightIcon,
+  MenuIcon,
   MessageCirclePlus,
   PanelLeftClose,
   PanelLeftOpen,
@@ -42,6 +43,8 @@ interface DesktopTopOverlayProps {
   onGoBack: () => void;
   onGoForward: () => void;
   hideTaskNavigationButtons?: boolean;
+  /** Sando: phone-width web page — show a 44 px drawer toggle and keep the overlay above the open drawer. */
+  isMobileDrawer?: boolean;
   newTaskDisabledReason?: string;
 }
 
@@ -71,11 +74,15 @@ export function DesktopTopOverlay({
   onCreateTask,
   onGoBack,
   onGoForward,
-  hideTaskNavigationButtons = false,
+  hideTaskNavigationButtons: hideTaskNavigationButtonsProp = false,
+  isMobileDrawer = false,
   newTaskDisabledReason,
 }: DesktopTopOverlayProps) {
   const { intl } = useZCodeIntl();
   const SidebarToggleIcon = isSidebarVisible ? PanelLeftClose : PanelLeftOpen;
+  // Phones have no room for back/forward next to the drawer toggle (same call upstream makes for mobile remote).
+  const hideTaskNavigationButtons = hideTaskNavigationButtonsProp || isMobileDrawer;
+  const mobileTouchButtonClassName = isMobileDrawer ? "size-11 rounded-xl" : undefined;
   const isLinuxDesktop = Boolean(isDesktop && !isMacDesktop && !isWindowsDesktop);
   const usesCustomCaptionArea = isWindowsDesktop || isLinuxDesktop;
   const toggleSidebarTitle = intl.formatMessage({
@@ -95,7 +102,7 @@ export function DesktopTopOverlay({
         paddingRight: WINDOWS_CAPTION_CONTROLS_RIGHT_INSET_VAR,
       }
     : undefined;
-  const topOverlayWidthStyle = isSidebarVisible
+  const topOverlayWidthStyle = isSidebarVisible && !isMobileDrawer
     ? { width: "var(--workspace-sidebar-panel-width)" }
     : undefined;
 
@@ -104,6 +111,9 @@ export function DesktopTopOverlay({
       style={topOverlayWidthStyle}
       className={cn(
         "@container/topoverlayer pointer-events-none absolute h-14 flex left-0 top-0 z-20 w-fit",
+        // Above the open phone drawer (z-50) so its close button stays reachable; header-height on phones.
+        isMobileDrawer && "h-12 pl-1",
+        isMobileDrawer && isSidebarVisible && "z-[60]",
         // Windows/Linux 主面板新增 4px 留白及 1px 边框，左侧工具组需同步偏移才能对齐 Header 中心线。
         usesCustomCaptionArea && "top-1 mt-px",
       )}
@@ -149,6 +159,22 @@ export function DesktopTopOverlay({
             </DesktopTopOverlayActionButton>
           )}
 
+          {isMobileDrawer && (
+            <DesktopTopOverlayActionButton
+              title={toggleSidebarTitle}
+              ariaLabel={toggleSidebarTitle}
+              testId="sando-mobile-drawer-toggle"
+              buttonClassName={mobileTouchButtonClassName}
+              onClick={onToggleSidebar}
+            >
+              {isSidebarVisible ? (
+                <PanelLeftClose className="size-5" />
+              ) : (
+                <MenuIcon className="size-5" />
+              )}
+            </DesktopTopOverlayActionButton>
+          )}
+
           {isMacDesktop && (
             <DesktopTopOverlayActionButton
               title={toggleSidebarTitle}
@@ -189,10 +215,15 @@ export function DesktopTopOverlay({
             aria-hidden={!isNewTaskButtonVisible}
             className={cn(
               "inline-flex overflow-hidden transition-[opacity,width] duration-300 ease-out",
-              isNewTaskButtonVisible ? "w-7 opacity-100" : "pointer-events-none w-0 opacity-0",
+              isNewTaskButtonVisible
+                ? isMobileDrawer
+                  ? "w-11 opacity-100"
+                  : "w-7 opacity-100"
+                : "pointer-events-none w-0 opacity-0",
             )}
           >
             <DesktopTopOverlayActionButton
+              buttonClassName={mobileTouchButtonClassName}
               title={newTaskDisabledReason ?? newTaskTitle}
               shortcut={newTaskShortcutLabel}
               ariaLabel={newTaskTitle}

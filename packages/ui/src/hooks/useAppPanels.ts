@@ -7,6 +7,12 @@ import type { CodeViewerSource } from "@/lib/codeViewer.js";
 // 关闭 terminal tab 时必须显式 release，杀掉 PTY，避免常驻 registry 造成孤儿进程。
 import { sidePaneTerminalSessionRegistry } from "@/terminal/sidePaneTerminalSessionRegistry.js";
 import {
+  SANDO_NARROW_VIEWPORT_QUERY,
+  isNarrowViewport,
+  persistMobileSidebarOpen,
+  readMobileSidebarOpen,
+} from "@/lib/sandoNarrowViewport.js";
+import {
   buildTaskSidePaneMemoryKey,
   getSidePaneCollapsedPreference,
   readTaskSidePaneMemoryState,
@@ -202,7 +208,19 @@ export function useAppPanels(options: {
   // 交互说明：侧栏显隐按钮放在 App 外层，而不是 Sidebar 内部。
   // 这样即使侧栏被隐藏，入口也仍然留在左上角，不会出现"收起后没有地方再展开"的问题；
   // 同时这里统一处理 macOS 红绿灯安全区，避免按钮和系统窗口控件重叠。
-  const [isSidebarVisible, setIsSidebarVisible] = useState(true);
+  // Sando: on a phone-width web page the sidebar is a drawer that starts closed (or as the user left it).
+  const [isSidebarVisible, setIsSidebarVisible] = useState(() =>
+    !isDesktop && isNarrowViewport() ? readMobileSidebarOpen() : true,
+  );
+  useEffect(() => {
+    if (isDesktop || typeof window === "undefined" || typeof window.matchMedia !== "function") {
+      return;
+    }
+    const mql = window.matchMedia(SANDO_NARROW_VIEWPORT_QUERY);
+    const handleChange = () => setIsSidebarVisible(mql.matches ? readMobileSidebarOpen() : true);
+    mql.addEventListener("change", handleChange);
+    return () => mql.removeEventListener("change", handleChange);
+  }, [isDesktop]);
   const [browserNavigationRequest, setBrowserNavigationRequest] =
     useState<BrowserNavigationRequest | null>(null);
   const [allRecentClosedSidePaneTabs, setAllRecentClosedSidePaneTabs] = useState<
@@ -1238,8 +1256,14 @@ export function useAppPanels(options: {
   }, [isOfficeMode, workspaceAbsPath]);
 
   const handleToggleSidebar = useCallback(() => {
-    setIsSidebarVisible((visible) => !visible);
-  }, []);
+    setIsSidebarVisible((visible) => {
+      const nextVisible = !visible;
+      if (!isDesktop && isNarrowViewport()) {
+        persistMobileSidebarOpen(nextVisible);
+      }
+      return nextVisible;
+    });
+  }, [isDesktop]);
 
   const handleToggleSidePaneCollapse = useCallback(() => {
     setIsSidePaneCollapsed((collapsed) => {

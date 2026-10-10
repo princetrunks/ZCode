@@ -17,6 +17,7 @@ import {
   WorkspaceHeaderTitleSection,
 } from "@/WorkspaceHeaderSections.js";
 import type { WorkspaceHeaderVariant } from "@/WorkspaceHeaderSections/shared.js";
+import { useNarrowViewport } from "@/lib/sandoNarrowViewport.js";
 
 export function WorkspaceHeader({
   variant = "task",
@@ -115,7 +116,9 @@ export function WorkspaceHeader({
   allowOpenWorkspace?: boolean;
 }) {
   const [selectedEditor, setSelectedEditor] = useState<EditorInfo | null>(null);
-  const shouldOffsetHeaderForWindowControls = !isSidebarVisible;
+  const isNarrowViewport = useNarrowViewport();
+  const shouldOffsetHeaderForWindowControls =
+    !isSidebarVisible || (!isDesktop && isNarrowViewport);
   // Linux 与 Windows 共用内联窗控，不再预留旧悬浮窗控的标题栏区域。
   const usesInlineWindowControls = Boolean(isWindowsDesktop || (isDesktop && !isMacDesktop));
 
@@ -127,6 +130,9 @@ export function WorkspaceHeader({
       } else {
         headerWindowControlsPaddingClass = isMacFullscreen ? "pl-38" : "pl-58";
       }
+    } else if (!isDesktop && isNarrowViewport) {
+      // Sando phone layout: the overlay holds only the 44 px drawer toggle + new task.
+      headerWindowControlsPaddingClass = "pl-26";
     } else {
       headerWindowControlsPaddingClass = hasUpdateReady ? "pl-44" : "pl-38";
     }

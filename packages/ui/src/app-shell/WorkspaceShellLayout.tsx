@@ -94,6 +94,7 @@ import {
 import type { WorkspaceShellLayoutProps } from "@/app-shell/types.js";
 import { useTabStoreApi } from "@/store/TabStoreProvider.js";
 import { useZCodeSessionStore } from "@/store/zcodeSessionStore.js";
+import { useNarrowViewport } from "@/lib/sandoNarrowViewport.js";
 import type { ComposerMentionPrefill } from "@/store/zcodeSessionStoreTypes.js";
 
 const WORKSPACE_SIDEBAR_DEFAULT_WIDTH_PX = 264;
@@ -352,6 +353,9 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
     workspaceShellRadiusOptions,
   );
   const collapsedSidebarWidthPx = hasDesktopPanelInset ? 4 : 0;
+  // Sando: phone-width web page → the sidebar is an off-canvas drawer over a full-width main pane.
+  const isNarrowViewport = useNarrowViewport();
+  const isMobileDrawer = !isDesktop && isNarrowViewport;
   const [draftHeaderDropTargetController, setDraftHeaderDropTargetController] =
     useState<ConversationDropTargetController | null>(null);
   const fileTreeOpenRequestIdRef = useRef(0);
@@ -403,6 +407,19 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
     );
   }, [openWorkspaceKeys]);
   const isSidebarPanelVisible = isSidebarVisible;
+  const closeMobileDrawerAfter = useCallback(
+    <Args extends unknown[], R>(handler: ((...args: Args) => R) | undefined) =>
+      handler
+        ? (...args: Args): R => {
+            const result = handler(...args);
+            if (isMobileDrawer && conversationAutoCollapseStateRef.current.isSidebarVisible) {
+              conversationAutoCollapseStateRef.current.handleToggleSidebar();
+            }
+            return result;
+          }
+        : undefined,
+    [isMobileDrawer],
+  );
   const {
     panelRef: terminalPanelRef,
     panelElementRef: terminalPanelElementRef,
@@ -1502,6 +1519,29 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
     () => [workspaceKey, activeTaskId ?? "draft"],
     [workspaceKey, activeTaskId],
   );
+  // Sando phone drawer: anything that navigates away from the drawer also closes it. Memoised so the sidebar
+  // subtree does not re-render on every shell render.
+  const sidebarHandlers = useMemo(
+    () => ({
+      onSelectTask: closeMobileDrawerAfter(handleSelectTaskInChat)!,
+      onStartDraftInWorkspace: closeMobileDrawerAfter(handleCreateProjectDraft)!,
+      onCreateTask: closeMobileDrawerAfter(handleCreateTaskInChat)!,
+      onCreateConversationTask: closeMobileDrawerAfter(
+        onCreateConversationTask ?? handleCreateTaskInChat,
+      )!,
+      onOpenAutomations: closeMobileDrawerAfter(handleOpenAutomations)!,
+      onOpenPluginStore: closeMobileDrawerAfter(handleOpenPluginStore)!,
+    }),
+    [
+      closeMobileDrawerAfter,
+      handleCreateProjectDraft,
+      handleCreateTaskInChat,
+      handleOpenAutomations,
+      handleOpenPluginStore,
+      handleSelectTaskInChat,
+      onCreateConversationTask,
+    ],
+  );
   const workspaceSidebarVisibilityResetKeys = useMemo(
     () => [workspaceKey, isSidebarVisible],
     [workspaceKey, isSidebarVisible],
@@ -1532,11 +1572,21 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
           data-panel=""
           data-workspace-sidebar-panel="true"
           id="sidebar"
+          data-sando-mobile-drawer={isMobileDrawer ? "true" : undefined}
           className={cn(
-            "w-[var(--workspace-sidebar-panel-width)] max-w-[50%] flex-none overflow-hidden duration-200 ease-out transition-[width,opacity] data-[workspace-sidebar-resizing=true]:transition-opacity",
+            isMobileDrawer
+              ? // Sando phone drawer: fixed over the main pane, slides in from the left, safe-area aware.
+                "fixed inset-y-0 left-0 z-50 w-[min(86vw,320px)] max-w-none overflow-hidden bg-background-win-alt pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] transition-transform duration-200 ease-out"
+              : "w-[var(--workspace-sidebar-panel-width)] max-w-[50%] flex-none overflow-hidden duration-200 ease-out transition-[width,opacity] data-[workspace-sidebar-resizing=true]:transition-opacity",
             // 拖动侧栏宽度时如果继续过渡 width，会让指针移动和实际宽度之间产生滞后。
             // 拖拽 active 通过 DOM 标记切 transition，避免 pointerdown/up 为了切 class 重渲染整棵 workspace。
-            isSidebarPanelVisible ? "opacity-100" : "pointer-events-none opacity-0",
+            isMobileDrawer
+              ? isSidebarPanelVisible
+                ? "translate-x-0 shadow-2xl"
+                : "pointer-events-none -translate-x-full"
+              : isSidebarPanelVisible
+                ? "opacity-100"
+                : "pointer-events-none opacity-0",
           )}
         >
           <aside
@@ -1561,13 +1611,13 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
                     workspacePath={workspaceAbsPath}
                     workspaceRemoteSessionId={workspaceRemoteSessionId}
                     activePreviewPath={activePreviewPath}
-                    onSelectTask={handleSelectTaskInChat}
-                    onStartDraftInWorkspace={handleCreateProjectDraft}
+                    onSelectTask={sidebarHandlers.onSelectTask}
+                    onStartDraftInWorkspace={sidebarHandlers.onStartDraftInWorkspace}
                     onOpenCodeViewer={handleOpenCodeViewer}
                     onOpenBrowserUrl={handleOpenBrowserUrl}
                     fileTreeOpenRequest={fileTreeOpenRequest}
-                    onCreateTask={handleCreateTaskInChat}
-                    onCreateConversationTask={onCreateConversationTask ?? handleCreateTaskInChat}
+                    onCreateTask={sidebarHandlers.onCreateTask}
+                    onCreateConversationTask={sidebarHandlers.onCreateConversationTask}
                     onOpenFolderFromWorkspaceMenu={onOpenFolderFromWorkspaceMenu}
                     onOpenRemoteWorkspace={onOpenRemoteWorkspace}
                     theme={theme}
@@ -1596,9 +1646,9 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
                     goBackShortcutLabel={goBackShortcutLabel}
                     goForwardShortcutLabel={goForwardShortcutLabel}
                     onOpenCommandCenter={handleOpenCommandCenter}
-                    onOpenAutomations={handleOpenAutomations}
+                    onOpenAutomations={sidebarHandlers.onOpenAutomations}
                     automationsActive={workspaceMainView === "automations"}
-                    onOpenPluginStore={handleOpenPluginStore}
+                    onOpenPluginStore={sidebarHandlers.onOpenPluginStore}
                     pluginStoreActive={workspaceMainView === "plugin-store"}
                     onFileTreeOpenChange={setIsSidebarFileTreeOpen}
                   />
@@ -1608,7 +1658,16 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
           </aside>
         </div>
 
-        {isSidebarVisible ? (
+        {isMobileDrawer && isSidebarVisible ? (
+          <button
+            type="button"
+            aria-label={intl.formatMessage({ id: "workspaceSidebar.toggleSidebar" })}
+            data-sando-drawer-backdrop="true"
+            className="fixed inset-0 z-40 cursor-default bg-black/50"
+            onClick={handleToggleSidebar}
+          />
+        ) : null}
+        {isSidebarVisible && !isMobileDrawer ? (
           <div
             role="separator"
             tabIndex={0}
@@ -1636,7 +1695,8 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
           data-panel=""
           id="content"
           className={cn(
-            "flex min-w-[320px] flex-1 flex-col",
+            "flex flex-1 flex-col",
+            isMobileDrawer ? "min-w-0" : "min-w-[320px]",
             hasDesktopPanelInset ? "p-1 pl-0 pt-0" : "p-0",
           )}
         >
@@ -1963,6 +2023,7 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
             appLogoUrl={appLogoUrl}
             platform={platform}
             onToggleSidebar={handleToggleSidebar}
+            isMobileDrawer={isMobileDrawer}
             onCreateTask={handleCreateTaskInChat}
             onGoBack={primaryNavigationBack}
             onGoForward={handleTaskNavForward}

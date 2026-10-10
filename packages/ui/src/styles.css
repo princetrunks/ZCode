@@ -2051,3 +2051,60 @@ body {
 .prompt-mention[data-mention-category="plugins"]::before {
   border-radius: var(--radius-sm);
 }
+
+/*
+ * Sando (ShrineTech): phone-width web layout (< 768 px). The sidebar drawer lives in WorkspaceShellLayout; these
+ * rules cover the parts that are plain CSS. Desktop and wide web layouts are untouched — every rule is behind the
+ * media query, and the frame padding is 0 wherever there are no safe-area insets (including inside an iframe).
+ */
+@media (max-width: 767.98px) {
+  /* iOS notch / home indicator (needs viewport-fit=cover in index.html). */
+  [data-desktop-window-frame="true"] {
+    padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px)
+      env(safe-area-inset-left, 0px);
+  }
+
+  /* Composer: thumb-sized controls, 16 px input so iOS Safari does not zoom on focus. */
+  [data-testid="v4-composer"] button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  [data-testid="v4-composer"] button[data-slot="badge"],
+  [data-testid="v4-composer"] [data-composer-attachment-remove] {
+    min-width: 0;
+    min-height: 0;
+  }
+  [data-testid="v4-composer-input"],
+  [data-testid="v4-composer-input"] * {
+    font-size: 16px !important;
+  }
+
+  /* Suggested-prompt chips wrap (upstream scrolls them sideways and hides the scrollbar, so the last ones looked cut off). */
+  [data-v4-draft-suggested-prompts-group="true"] {
+    width: auto;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+  }
+  [data-v4-draft-suggested-prompts-group="true"] [data-draft-suggested-prompt] {
+    min-height: 44px;
+  }
+
+  /* Long text wraps; code, tables, mermaid and display math scroll inside their own block. */
+  [data-workspace-conversation-frame="true"] {
+    overflow-wrap: anywhere;
+  }
+  [data-workspace-conversation-frame="true"] pre,
+  [data-workspace-conversation-frame="true"] table,
+  [data-workspace-conversation-frame="true"] .katex-display,
+  [data-workspace-conversation-frame="true"] [data-streamdown="mermaid-block"],
+  [data-workspace-conversation-frame="true"] [data-streamdown="table-wrapper"] {
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  [data-workspace-conversation-frame="true"] pre code {
+    overflow-wrap: normal;
+    word-break: normal;
+  }
+}

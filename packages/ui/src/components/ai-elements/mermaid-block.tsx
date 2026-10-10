@@ -1,6 +1,7 @@
 "use client";
 
 import { createMermaidPlugin, type MermaidConfig } from "@streamdown/mermaid";
+import { useNarrowViewport } from "@/lib/sandoNarrowViewport.js";
 import { Loader2Icon } from "lucide-react";
 import type { HTMLAttributes } from "react";
 import { useEffect, useId, useMemo, useState } from "react";
@@ -249,6 +250,14 @@ export function MermaidBlock({
   const [renderState, setRenderState] = useState<MermaidRenderState>({
     status: "loading",
   });
+  // Sando phone layout: mermaid draws with width=100% + max-width, so on a 390 px screen a wide flowchart shrank to
+  // unreadable 4 px text. Below 768 px the diagram keeps its natural width and scrolls sideways inside this block.
+  const isNarrowViewport = useNarrowViewport();
+  const readySvg = renderState.status === "ready" ? renderState.svg : null;
+  const displaySvg = useMemo(
+    () => (readySvg && isNarrowViewport ? withNaturalMermaidWidth(readySvg) : readySvg),
+    [isNarrowViewport, readySvg],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -317,7 +326,7 @@ export function MermaidBlock({
           <div
             aria-label={intl.formatMessage({ id: "codeBlock.mermaid.ariaLabel" })}
             className="flex min-h-28 min-w-max items-center justify-center [&_svg]:h-auto [&_svg]:max-w-none"
-            dangerouslySetInnerHTML={{ __html: renderState.svg }}
+            dangerouslySetInnerHTML={{ __html: displaySvg ?? renderState.svg }}
             onDoubleClick={onOpenPreview}
             role="img"
           />
@@ -325,4 +334,19 @@ export function MermaidBlock({
       </div>
     </div>
   );
+}
+
+/** Pin the root <svg> to the max-width mermaid computed (its natural width), so it scrolls instead of shrinking. */
+function withNaturalMermaidWidth(svg: string): string {
+  const openTagEnd = svg.indexOf(">");
+  if (openTagEnd < 0) {
+    return svg;
+  }
+  const openTag = svg.slice(0, openTagEnd);
+  const match = /max-width:\s*([\d.]+)px/.exec(openTag);
+  if (!match) {
+    return svg;
+  }
+  const widthPx = match[1];
+  return `${openTag.replace(match[0], `max-width: none; width: ${widthPx}px; min-width: ${widthPx}px`)}${svg.slice(openTagEnd)}`;
 }
