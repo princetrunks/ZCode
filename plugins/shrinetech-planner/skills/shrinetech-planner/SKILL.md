@@ -41,7 +41,7 @@ description: How to use the ShrineTech Project Planner tools (mcp shrinetech-pla
 ## Pi 5 GitHub mirror
 
 "Back up / mirror / sync the repos to the Pi" means the forge command `pi-mirror` (shell, not an MCP tool): `pi-mirror status` first,
-then `pi-mirror run` (refreshes the repo list from GitHub, starts the mirror on theAIRaspPi in the background), `pi-mirror log` to check.
+then `pi-mirror run` (refreshes the repo list from GitHub, starts the mirror on theAIRaspPi in the background), `pi-mirror log` to check. "Fork X and back it up" = `pi-mirror fork <github url>`.
 Never delete, reset or push anything in the mirror. Same as the `/pi-mirror` command.
 
 ## Diagrams and math

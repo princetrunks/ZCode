@@ -8,8 +8,9 @@ Drive it ONLY through the forge command `pi-mirror` (in `~/bin`, run it with you
 - `pi-mirror status` — counts, last run summary, and GitHub repos not yet on the Pi. Always run this first and report it.
 - `pi-mirror refresh` — rebuild `repos.txt` from GitHub (`gh`) and copy it to the Pi (old copy kept as `repos.txt.bak`).
 - `pi-mirror run` — refresh, then start the mirror on the Pi in the background (returns at once; `--dry-run` to preview).
+- `pi-mirror fork <github url or owner/repo>` — fork someone else's repo into princetrunks on GitHub, then run the mirror so the Pi backs it up.
 - `pi-mirror log` — tail of the current/last run. A run takes ~2-30 min; check the log, do not wait in a loop.
 
-If `$ARGUMENTS` is empty or "status": run `pi-mirror status`. If it says "run", "sync", "backup" or "update": run `pi-mirror run`, then
+If `$ARGUMENTS` is empty or "status": run `pi-mirror status`. If it gives a GitHub URL or says "fork": run `pi-mirror fork <url>`, then `pi-mirror log` a minute or two later and confirm the repo was CLONEd. If it says "run", "sync", "backup" or "update": run `pi-mirror run`, then
 `pi-mirror log` once a minute or two later, and report cloned / fetched / skipped / failed. Rules: never delete or reset anything on the Pi,
 never edit `mirror_repos.sh`, never `git push` from the mirror; a SKIP-DIRTY repo (zenime) is expected — report it, do not "fix" it. $ARGUMENTS
