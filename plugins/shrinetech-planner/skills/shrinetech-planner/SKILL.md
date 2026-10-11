@@ -38,6 +38,12 @@ description: How to use the ShrineTech Project Planner tools (mcp shrinetech-pla
 - Danielle stills (recipe of record): `generate_image` style `qwen21`, prompt starting with the H3 descriptor prose, `loras:
   ["danielle_qi21_v6b.safetensors:1.0"]`, one reference sheet in `reference_images` (`ref_d9_3_512.jpg`).
 
+## Pi 5 GitHub mirror
+
+"Back up / mirror / sync the repos to the Pi" means the forge command `pi-mirror` (shell, not an MCP tool): `pi-mirror status` first,
+then `pi-mirror run` (refreshes the repo list from GitHub, starts the mirror on theAIRaspPi in the background), `pi-mirror log` to check.
+Never delete, reset or push anything in the mirror. Same as the `/pi-mirror` command.
+
 ## Diagrams and math
 
 Sando's web workbench and the Planner's Chat / Lily pages render a ```mermaid fence as a diagram and `$…$` / `$$…$$` as KaTeX.
