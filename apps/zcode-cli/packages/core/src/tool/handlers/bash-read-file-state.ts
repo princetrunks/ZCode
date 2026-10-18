@@ -114,6 +114,7 @@ async function backfillReadFileStateFromBash(input: BashReadFileStateEffectsInpu
         operation: "read",
         workingDirectory: input.context.workingDirectory,
         workspaceRoot: input.context.workspaceRoot,
+        skipConfinement: true,
       });
       if (findLatestReadFileState(readFileState, resolvedPath)) return;
 

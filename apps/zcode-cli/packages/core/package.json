@@ -29,7 +29,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "oxlint src --no-ignore",
     "lint:fix": "oxlint --fix src --no-ignore",
-    "test": "node --test test/*.test.mjs"
+    "test": "pnpm --dir ../../../.. exec tsx --test apps/zcode-cli/packages/core/test/*.test.mjs"
   },
   "dependencies": {
     "@zcode/contracts": "workspace:*",

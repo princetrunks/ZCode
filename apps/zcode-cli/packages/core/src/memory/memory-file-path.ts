@@ -35,6 +35,7 @@ export function resolveContainedMemoryFilePath(input: {
     operation: "write",
     workingDirectory: input.workingDirectory,
     workspaceRoot: input.workspaceRoot,
+    skipConfinement: true,
   });
   const relativePath = relative(input.rootDir, resolvedPath);
   return isContainedRelativePath(relativePath) ? resolvedPath : undefined;
