@@ -41,6 +41,8 @@ import type { BundledTheme } from "shiki";
 import { defaultRehypePlugins, defaultRemarkPlugins, Streamdown } from "streamdown";
 import type { Pluggable, PluggableList } from "unified";
 import { CodeBlock, CodeBlockHeader } from "@/components/ai-elements/code-block.js";
+import { FormBlock } from "@/components/ai-elements/form-block.js";
+import { isFormLanguage } from "@/lib/formSpec.js";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -1558,7 +1560,7 @@ export const MessageResponse = memo(
           const codeText = trimCodeFenceTrailingNewlines(extractCodeText(children));
           const language = getCodeLanguage(codeClassName);
 
-          return (
+          const codeBlock = (
             <CodeBlock
               className="my-4 border border-border bg-card"
               code={codeText}
@@ -1579,6 +1581,12 @@ export const MessageResponse = memo(
               />
             </CodeBlock>
           );
+          // Sando: ```form fences become answerable forms once the reply has finished streaming
+          // (a half-streamed spec is not valid JSON yet, so it shows as source until then).
+          if (!renderStreaming && isFormLanguage(language)) {
+            return <FormBlock code={codeText} scope={sessionId} fallback={codeBlock} />;
+          }
+          return codeBlock;
         },
         blockquote: MarkdownBlockquote,
         li: MarkdownListItem,

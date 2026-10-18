@@ -16,6 +16,7 @@ import {
   type ReactNode,
 } from "react";
 import { Hand } from "lucide-react";
+import { FORM_SUBMIT_EVENT, type FormSubmitDetail } from "@/lib/formSpec.js";
 import {
   BUILTIN_MODEL_PROVIDER_IDS,
   buildCustomSupplierKey,
@@ -3002,6 +3003,46 @@ export function SessionPane({
     [dispatchSendText, focusTimelineToLatest, intl, sessionId],
   );
 
+  // Sando: answers from a ```form block (components/ai-elements/form-block.tsx) bubble up from this pane's timeline
+  // as a DOM event and go out as the next user message, through the same path as the composer. A running turn
+  // queues them (guide mode is asked to queue rather than steer); a held queue keeps its items and sends now,
+  // since pressing the form's Send is the confirmation. The form locks as "Sent" only when this resolves true.
+  const sessionPaneRootRef = useRef<HTMLDivElement>(null);
+  const sendFormAnswer = useCallback(
+    async (text: string): Promise<boolean> => {
+      if (!sessionId) return false;
+      const routing = snapshotRef.current?.inputRouting.mode ?? null;
+      if (routing === "reject") return false;
+      let result = await handleSendText(
+        text,
+        routing === "guide" ? { requestedDelivery: "queue" } : undefined,
+      );
+      if (result === "confirmationRequired") {
+        result = await handleSendText(text, {
+          heldQueueDisposition: "keepQueueAndSend",
+          expectedHeldQueueItemIds:
+            snapshotRef.current?.queue.items.map((item) => item.queueItemId) ?? [],
+        });
+      }
+      return result === "sent";
+    },
+    [handleSendText, sessionId],
+  );
+  useEffect(() => {
+    const root = sessionPaneRootRef.current;
+    if (!root) return;
+    const onFormSubmit = (event: Event) => {
+      const detail = (event as CustomEvent<FormSubmitDetail>).detail;
+      if (!detail?.text) return;
+      // Innermost pane wins (a side conversation nested in a pane must not send twice).
+      event.preventDefault();
+      event.stopPropagation();
+      detail.accept?.(sendFormAnswer(detail.text).catch(() => false));
+    };
+    root.addEventListener(FORM_SUBMIT_EVENT, onFormSubmit);
+    return () => root.removeEventListener(FORM_SUBMIT_EVENT, onFormSubmit);
+  }, [sendFormAnswer]);
+
   const handleComposerDraftStateChange = useCallback(
     (state: { hasContent: boolean; busy: boolean }) => {
       composerDraftStateRef.current = state;
@@ -4580,6 +4621,7 @@ export function SessionPane({
 
   return (
     <div
+      ref={sessionPaneRootRef}
       data-testid={testId(TID_V4_SESSION_PANE, paneId)}
       data-session-id={sessionId ?? "draft"}
       data-initial-draft-provider={initialDraftConfigForDiagnostics?.provider ?? ""}
