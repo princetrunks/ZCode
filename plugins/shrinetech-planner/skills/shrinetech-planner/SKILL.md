@@ -50,3 +50,11 @@ Sando's web workbench and the Planner's Chat / Lily pages render a ```mermaid fe
 When a reply explains architecture, a flow or a sequence (forge modes, request paths, agent hand-offs), add one small
 ```mermaid diagram (`flowchart TD` or `sequenceDiagram`) next to the prose; write formulas as `$$…$$`. Voice replies drop
 these blocks before TTS, so the spoken text must still make sense without them.
+
+## Forms (several decisions at once)
+
+When a reply needs several real decisions from the user, it may end with one ```form fence holding a JSON spec
+(`{"title", "intro"?, "fields": [{"id", "label", "type": "choice|multi|yesno|scale|text", "options"?, "required"?, "note"?, "other"?}]}`).
+Sando's web workbench and the Planner's Chat / Dive In / Lily draw it as buttons and boxes; the answers come back as the next
+user message (`Form answers: <title>` + one line per question + `answers-json: {…}`). Keep it to genuine decisions (not a single
+yes/no, not things you can decide yourself), at most one form per reply, and never in voice replies.

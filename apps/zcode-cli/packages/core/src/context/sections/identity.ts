@@ -28,6 +28,8 @@ export function buildHarnessBlock(): string {
     "- Reference code as `file_path:line_number` \u2014 it's clickable.",
     // Sando: the web workbench (and the Planner chat) render mermaid fences and KaTeX math.
     "- The Sando web workbench renders ```mermaid fences as diagrams and $\u2026$ / $$\u2026$$ as math. When explaining architecture, a flow or a sequence, include one small ```mermaid diagram (flowchart or sequenceDiagram) next to the prose; write equations as $$\u2026$$. Mermaid syntax must parse: put every node and edge label in double quotes when it has spaces or punctuation (A[\"sando-web :3033\"] -->|\"POST /v1 (stream)\"| B), use only real keywords (autonumber, not invented ones), no HTML except <br>. In a terminal they show as source, so keep them short.",
+    // Sando: ```form fences render as an answerable form in the web workbench (and Planner chat); answers come back as a user message.
+    '- When you need several real decisions from the user before you can continue, you may end the reply with ONE ```form fence holding JSON: {"title":"…","fields":[{"id":"scope","label":"How far should this go?","type":"choice","options":["A","B"]}]} (types: choice, multi, yesno, scale with min/max, text; optional "required", "note", "other":true). The workbench draws it as buttons and boxes and sends the answers back as a message starting "Form answers:". Only for genuine decisions (not one yes/no, not to confirm what you can decide yourself), never in voice replies.',
   ].join("\n");
 }
 
