@@ -8,6 +8,15 @@ genuinely useful features that local models need. Maybe a product later (Harness
 - Planner plugin: MCP bridge with 51 tools, `/pp-status`, `/pp-ticket`, `/pp-render`, `/forge`, `/pi-mirror`.
 - Shell gate in SHADOW mode: CRACK classifies each proposed Bash command as safe / review / never_unattended.
 - Inline diagrams (mermaid) and math (`$$`) in the web workbench, the same as Planner Chat, Dive In and /lily.
+- **Answerable ```form blocks** (done on branch `fleet/sando-forms-20261018`, 2026-10-18, not yet merged into `sando`): the
+  model can end a reply with one JSON ```form (choice / multi / yes-no / scale / text); the web workbench draws chips and boxes
+  and sends the answers as the next user message (queued while a turn runs), locks as "Sent" with "Change answers". Same
+  contract as the Planner's Chat / Dive In / Lily forms. The # Harness block and the Planner skill teach the model when to use it.
+- **Run flags for launchers and Harness²** (same branch, tested end to end against a scripted local server):
+  `--model <provider>/<model>` (this run only, validated), `--harness <dir>` (extra AGENTS.md + skills + agents from outside the
+  workspace), `--max-turns <n>` (model steps per turn; the last step answers without tools) and `--confine-to-cwd` (file tools
+  refuse paths outside the workspace, symlinks resolved). Limits: confinement covers the file tools and the Bash working
+  directory, not what a running Bash command or the node REPL touches; `--harness` hooks.json (the proposal's c8) is not done.
 
 ## Table stakes (what the best harnesses have): status
 | Feature | Claude Code / Codex / OpenCode | Sando today | Next step |
