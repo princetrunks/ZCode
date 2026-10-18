@@ -451,7 +451,8 @@ async function runModelBackedTurnStepImpl(
 
   let toolCalls = this.extractToolCallsFromResult(result);
   const providerToolCallCount = toolCalls.length;
-  const localTerminalResponse = state.automationCreateLimitReached === true;
+  const localTerminalResponse =
+    state.automationCreateLimitReached === true || state.maxModelStepsReached === true;
   if (state.automationCreateLimitReached && toolCalls.length > 0) {
     // 即使 provider 在 tools=[] 后仍幻觉出工具调用，也不能重新进入执行器；
     // 上限命中后的当前用户 turn 已经是纯文本终止边界。
@@ -465,6 +466,18 @@ async function runModelBackedTurnStepImpl(
     state.modelResponse = buildAutomationCreateLimitFallback(state.input);
   } else if (state.automationCreateLimitReached && state.modelResponse.trim().length === 0) {
     state.modelResponse = buildAutomationCreateLimitFallback(state.input);
+  } else if (state.maxModelStepsReached && toolCalls.length > 0) {
+    // Sando --max-turns: tools were off for the last step; drop any hallucinated calls and end the turn.
+    this.logger?.warn("Ignored tool calls on the last step allowed by --max-turns", {
+      event: "max_model_steps.tool_calls_ignored",
+      module: "core.runtime",
+      status: "completed",
+      toolCallCount: toolCalls.length,
+    });
+    toolCalls = [];
+  }
+  if (state.maxModelStepsReached && state.modelResponse.trim().length === 0) {
+    state.modelResponse = `Stopped: this run allows ${this.config.maxModelStepsPerTurn} model steps per turn (--max-turns).`;
   }
   const usage = result.usage ?? {};
   const responseLength = state.modelResponse.length;

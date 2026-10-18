@@ -106,6 +106,7 @@ async function resolveUserInstructions(
     projectRoot,
     priorityFiles,
   );
+  const harnessInstructionFile = await findHarnessInstructionFile(priorityFiles, env);
   const candidates = dedupeInstructionFileCandidates([
     defaultUserInstructionFile
       ? { ...defaultUserInstructionFile, scope: "user" as const }
@@ -113,6 +114,8 @@ async function resolveUserInstructions(
     workspaceInstructionFile
       ? { ...workspaceInstructionFile, scope: "workspace" as const }
       : undefined,
+    // Sando --harness: last, so the user's and the project's own rules come first and win on conflict.
+    harnessInstructionFile ? { ...harnessInstructionFile, scope: "harness" as const } : undefined,
   ]);
   const sources: ResolvedUserInstructionSource[] = [];
 
@@ -224,6 +227,17 @@ async function findInstructionFile(
   }
 
   return undefined;
+}
+
+/** Sando: <ZCODE_HARNESS_DIR>/AGENTS.md (set by `sando --harness <dir>`). */
+async function findHarnessInstructionFile(
+  priorityFiles: string[],
+  env: NodeJS.ProcessEnv,
+): Promise<{ filePath: string; fileName: string } | undefined> {
+  const harnessDir = env.ZCODE_HARNESS_DIR?.trim();
+  if (!harnessDir || !priorityFiles.includes("AGENTS.md")) return undefined;
+  const filePath = join(resolve(harnessDir), "AGENTS.md");
+  return (await isFile(filePath)) ? { filePath, fileName: "AGENTS.md" } : undefined;
 }
 
 async function findDefaultUserInstructionFile(

@@ -42,6 +42,10 @@ Options:
   --force-mcs      Force mid-conversation system projection for Anthropic providers
   --locale <locale>  UI locale: en-US, zh-CN, or auto
   --mode <mode>    Permission mode for prompts: build, edit, plan, or yolo (default: yolo for --prompt)
+  --model <provider>/<model>  Model for this run only (not saved)
+  --harness <dir>  Add <dir>/AGENTS.md, <dir>/skills and <dir>/agents for this run
+  --max-turns <n>  Cap model steps per turn; the last step answers without tools
+  --confine-to-cwd File tools refuse paths outside the workspace (Bash commands themselves are not sandboxed)
   --resume <sessionId>  Resume a persisted session by sessionId (sess_...)
   --target <text>  Run or set the session goal in headless mode
   --target-replace Replace any existing session goal set by --target

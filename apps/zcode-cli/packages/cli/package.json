@@ -20,6 +20,7 @@
     "upload:sea": "node scripts/upload-sea-smb.mjs",
     "clean": "node ../../scripts/clean-dist.mjs",
     "dev": "tsx src/main.ts",
+    "test": "pnpm --dir ../../../.. exec tsx --test apps/zcode-cli/packages/cli/test/*.test.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "oxlint src",
     "lint:fix": "oxlint --write src"

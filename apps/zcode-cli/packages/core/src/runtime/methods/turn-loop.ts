@@ -106,16 +106,21 @@ export async function runRegularTurnLoop(
     await this.initializeMcp(state.turnTraceContext);
     finishMcp();
     throwIfTurnAborted(state.turnAbortSignal);
+    const maxSteps = this.config.maxModelStepsPerTurn;
+    if (maxSteps && maxSteps > 0 && state.modelStepCount >= maxSteps - 1) {
+      state.maxModelStepsReached = true;
+    }
     const finishTools = beginLocalTurnPreparation(state.turnTraceContext, "tools");
     const turnDisallowedTools = buildTurnDisallowedTools(state);
     // automation 派发到已 active 会话或重试恢复时，入口 metadata 可能没有带到
     // loop state；但 queryId 仍是 automation-*。provider 请求边界必须按 queryId 再硬过滤
     // automation 写工具，否则模型会先看到并创建、修改或删除任务定义。
-    const tools = state.automationCreateLimitReached
-      ? []
-      : turnDisallowedTools
-        ? this.getTools(state.model).filter((tool) => !turnDisallowedTools.has(tool.name))
-        : this.getTools(state.model);
+    const tools =
+      state.automationCreateLimitReached || state.maxModelStepsReached
+        ? []
+        : turnDisallowedTools
+          ? this.getTools(state.model).filter((tool) => !turnDisallowedTools.has(tool.name))
+          : this.getTools(state.model);
     finishTools();
     if (!outputTokenRecoveryActive && this.needsPlanModeExitReminder) {
       this.needsPlanModeExitReminder = false;

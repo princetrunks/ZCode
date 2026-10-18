@@ -27,7 +27,8 @@ export interface UserInstructionsOptions {
   maxBytes?: number;
 }
 
-export type UserInstructionSourceScope = "user" | "workspace";
+// Sando: "harness" = <--harness dir>/AGENTS.md, appended after the user and workspace files.
+export type UserInstructionSourceScope = "user" | "workspace" | "harness";
 
 export interface ResolvedUserInstructionSource {
   scope: UserInstructionSourceScope;

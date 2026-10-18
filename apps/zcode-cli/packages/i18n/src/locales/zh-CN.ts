@@ -42,6 +42,10 @@ export const zhCN: ZCodeCopy = {
   --force-mcs      对 Anthropic provider 强制启用 mid-conversation system 投影
   --locale <locale>  UI 语言：en-US、zh-CN 或 auto
   --mode <mode>    prompt 权限模式：build、edit、plan 或 yolo（--prompt 默认 yolo）
+  --model <provider>/<model>  仅本次运行使用的模型（不保存）
+  --harness <dir>  本次运行加载 <dir>/AGENTS.md、<dir>/skills 和 <dir>/agents
+  --max-turns <n>  每轮最多模型步数；最后一步不带工具直接回答
+  --confine-to-cwd 文件工具拒绝工作区外的路径（Bash 命令本身不受沙箱限制）
   --resume <sessionId>  按 sessionId 恢复持久化 session（sess_...）
   --target <text>  在 headless 模式运行或设置 session goal
   --target-replace 替换 --target 已存在的 goal

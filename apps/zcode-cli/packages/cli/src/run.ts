@@ -1,4 +1,5 @@
 import { extractDisallowedToolsArgs, parseGlobalArgs } from "./arguments.js";
+import { resolveSandoRunFlags } from "./harness-flags.js";
 import { createNodeLoggerFactory } from "@zcode/adapters";
 import { getRuntimeInfo, type PresentationSurface } from "@zcode/core";
 import { color, formatJson, supportsColor } from "@zcode/core";
@@ -370,7 +371,15 @@ export const run = async (ctx: RunContext, deps: RunDependencies = {}): Promise<
     return 1;
   }
 
-  const env = prepareCliRuntimeEnv(deps.env ?? process.env);
+  // Sando: --model / --harness / --max-turns / --confine-to-cwd travel as env vars into the in-process runtime.
+  // Set them on process.env too: core tool path checks read the live process env, not the prepared copy.
+  const runFlags = resolveSandoRunFlags(parsed.values, process.cwd());
+  if ("error" in runFlags) {
+    ctx.stderr.write(`${runFlags.error}\n`);
+    return 1;
+  }
+  Object.assign(process.env, runFlags.env);
+  const env = prepareCliRuntimeEnv({ ...(deps.env ?? process.env), ...runFlags.env });
   const detectedLocale = detectCliLocale(env);
   let outputFormat: GlobalOptions["outputFormat"];
   try {

@@ -1,5 +1,10 @@
 import type { ConfigResult } from "@zcode/adapters/config";
-import { resolveInitialModelSelection, type ModelSelectionOptions } from "@zcode/provider";
+import {
+  completeNewModelSelection,
+  resolveInitialModelSelection,
+  type ModelSelection,
+  type ModelSelectionOptions,
+} from "@zcode/provider";
 import { resolveBashTimeoutPolicy, type AgentProfile, type AgentRuntimeConfig } from "@zcode/core";
 import { type BuiltInSubagentModelSelectionOverrides } from "@zcode/shared";
 import {
@@ -15,6 +20,8 @@ import { resolveDefaultEmbeddedSearchBackend } from "./embedded-search-backend.j
 import { getProjectMemoryRoot } from "./paths.js";
 import type { ZCodeAppOptions } from "./types.js";
 import {
+  createRegistrySelectionProtocolError,
+  parseProviderQualifiedModelSelection,
   resolveRegistryOwnedModelSelection,
   resolveRegistryModelSelection,
   type ResolvedRegistrySelection,
@@ -122,6 +129,8 @@ export function resolveAppRuntimeConfig(input: {
       resolveBashTimeoutPolicy(options.env ?? process.env),
     mode: options.runtimeConfig?.mode ?? persistedMode ?? configResult.config.permission.mode,
     modelSelection: initialModelSelection,
+    // Sando `--max-turns` (ZCODE_MAX_TURNS): model steps per user turn for this runtime only.
+    ...resolveMaxModelStepsPerTurn(options),
     // 仅接受显式传入的会话级工具面（ZCode Protocol session/create 或 CLI
     // --allowed-tools/--disallowed-tools）。不要从 config.permission.allowedTools
     // 回落：那个键的既有语义是“免审批清单”，把它投影到注册面会让老配置里
@@ -228,6 +237,15 @@ function resolveInitialRegistrySelection(
   }
 
   if (options.resume) return undefined;
+  // Sando: `--model <provider>/<model>` (ZCODE_MODEL) picks the model for this run only; nothing is persisted.
+  // Unlike the configured default, a bad value is an error, not a silent fall back to the first registry model.
+  const modelOverride = (options.env ?? process.env).ZCODE_MODEL?.trim();
+  if (modelOverride) {
+    const selection = resolveModelOverride(registry, modelOverride);
+    const resolved = resolveRegistryOwnedModelSelection(registry, selection);
+    if (!resolved) throw new Error(`--model: provider not found: ${selection.providerId}`);
+    return { ...resolved, ...(selection.options ? { selectionOptions: selection.options } : {}) };
+  }
   const initial = resolveInitialModelSelection({
     configuredDefault: options.configuredDefaultModelSelection,
     registry: registry.getView(),
@@ -240,6 +258,37 @@ function resolveInitialRegistrySelection(
         ...(initial.selection.options ? { selectionOptions: initial.selection.options } : {}),
       }
     : undefined;
+}
+
+function resolveMaxModelStepsPerTurn(
+  options: ZCodeAppOptions,
+): Pick<AgentRuntimeConfig, "maxModelStepsPerTurn"> {
+  if (options.runtimeConfig?.maxModelStepsPerTurn !== undefined) {
+    return { maxModelStepsPerTurn: options.runtimeConfig.maxModelStepsPerTurn };
+  }
+  const raw = (options.env ?? process.env).ZCODE_MAX_TURNS?.trim();
+  if (!raw) return {};
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value < 1) {
+    throw new Error(`--max-turns expects a positive whole number, got "${raw}"`);
+  }
+  return { maxModelStepsPerTurn: value };
+}
+
+/** Sando: "provider/model" → a validated selection; models with reasoning levels get the highest one. */
+export function resolveModelOverride(
+  registry: NonNullable<ZCodeAppOptions["providerRegistry"]>,
+  value: string,
+): ModelSelection {
+  const parsed = parseProviderQualifiedModelSelection(value);
+  if (!parsed) throw new Error(`--model expects <provider>/<model>, got "${value}"`);
+  const validation = registry.validateSelection(parsed);
+  if (validation.ok) return parsed;
+  if (validation.code === "reasoning-level-missing") {
+    const completed = completeNewModelSelection(registry.getView(), parsed);
+    if (completed) return completed;
+  }
+  throw createRegistrySelectionProtocolError(validation);
 }
 
 function mergeRuntimeHooks(

@@ -15,6 +15,8 @@ export interface SkillRootResolutionOptions {
   extraRoots?: string[];
   extraResolvedRoots?: SkillRoot[];
   includeZcodeSkills?: boolean;
+  /** Read for ZCODE_HARNESS_DIR (Sando --harness); defaults to process.env. */
+  env?: NodeJS.ProcessEnv;
 }
 
 export async function resolveDefaultSkillRoots(
@@ -31,7 +33,10 @@ export async function resolveDefaultSkillRoots(
     return priority;
   };
 
-  for (const extraRoot of options.extraRoots ?? []) {
+  // Sando --harness: <ZCODE_HARNESS_DIR>/skills is one more extra root, ahead of the configured ones.
+  const harnessDir = (options.env ?? process.env).ZCODE_HARNESS_DIR?.trim();
+  const harnessRoots = harnessDir ? [join(resolve(harnessDir), "skills")] : [];
+  for (const extraRoot of [...harnessRoots, ...(options.extraRoots ?? [])]) {
     roots.push(
       root(
         resolveConfiguredRoot(extraRoot, resolvedWorkingDirectory),

@@ -173,7 +173,7 @@ export async function finishModelStepWithoutToolCalls(
     includeEmptyAssistant: true,
   });
   if (assistantCommitted) recordModelHistoryRound(state);
-  if (state.automationCreateLimitReached) {
+  if (state.automationCreateLimitReached || state.maxModelStepsReached) {
     // 上限命中后只允许这一轮纯文本说明。跳过 guide 和 Stop hook，避免它们再次
     // 触发模型请求，把已经关闭工具的 turn 延长成新的恢复循环。
     if (state.activeTurn) {

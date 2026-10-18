@@ -130,5 +130,6 @@ function buildInstructionSourceContent(source: ResolvedUserInstructionSource): s
 }
 
 function formatInstructionSourceScope(scope: ResolvedUserInstructionSource["scope"]): string {
+  if (scope === "harness") return "harness instructions";
   return scope === "user" ? "user default instructions" : "workspace instructions";
 }

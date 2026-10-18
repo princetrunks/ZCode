@@ -54,6 +54,10 @@ export async function loadZCodeAgentProfiles(
   const roots = [
     { path: join(input.storageRoot, "agents"), source: "user" as const },
     { path: join(input.workingDirectory, ".zcode", "agents"), source: "project" as const },
+    // Sando --harness: <ZCODE_HARNESS_DIR>/agents, loaded last like the project agents.
+    ...(process.env.ZCODE_HARNESS_DIR?.trim()
+      ? [{ path: join(process.env.ZCODE_HARNESS_DIR.trim(), "agents"), source: "project" as const }]
+      : []),
   ];
   const diagnostics: AgentProfileParseDiagnostic[] = [];
   for (const failure of migration.failures) {

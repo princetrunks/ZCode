@@ -81,6 +81,8 @@ export interface RegularTurnLoopState {
   offPeakTaskId?: string;
   /** CronCreate 命中全局上限后，本用户 turn 永久切为纯文本回复，禁止模型自行恢复。 */
   automationCreateLimitReached?: boolean;
+  /** Sando --max-turns: this is the last allowed model step; tools are off and the turn ends after it. */
+  maxModelStepsReached?: boolean;
   anomalyWarningsInjected: number;
   /** 本轮是否已消费来源为 subagent 的后台结果通知。 */
   backgroundSubagentResultConsumed: boolean;

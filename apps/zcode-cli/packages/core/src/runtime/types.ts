@@ -129,6 +129,12 @@ export interface AgentRuntimeConfig {
   /** Session 创建时固定；缺省使用共享的模型上下文预算默认策略。 */
   modelContextBudgetStrategy?: "legacy" | "preflight-v1";
   maxTurns?: number;
+  /**
+   * Sando `--max-turns`: cap on model round-trips per user turn for THIS runtime (not inherited by subagents,
+   * whose `maxTurns` above is not enforced). The last allowed step runs with no tools, so the turn ends with a
+   * text answer instead of being cut mid-tool.
+   */
+  maxModelStepsPerTurn?: number;
   permissionTimeoutMs?: number;
   compact?: AutoCompactPolicyConfig;
   targetCompletionVerification?: { enabled?: boolean };

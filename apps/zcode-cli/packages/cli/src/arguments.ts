@@ -67,6 +67,11 @@ export const parseGlobalArgs = (argv: string[]) =>
       mode: {
         type: "string",
       },
+      // Sando run flags (cli/src/harness-flags.ts).
+      model: { type: "string" },
+      harness: { type: "string" },
+      "max-turns": { type: "string" },
+      "confine-to-cwd": { type: "boolean" },
       verbose: {
         type: "boolean",
       },
