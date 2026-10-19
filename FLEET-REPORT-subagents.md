@@ -57,15 +57,20 @@ So I did not add a second tool. I closed the gaps the brief asked for. The spec 
 - `pnpm typecheck` (root) passes. oxlint and oxfmt are clean on every file I changed. The package-level `pnpm lint` in
   `apps/zcode-cli` was already failing before this work on files I did not touch (max-lines in `steering.ts`,
   `session-fork.ts`, `prompt-command.ts`…).
-- **Real model (Bonsai 2 27B on :8100, jarvis mode, GPU-job lock taken, forge-mode untouched):** one run of the built
-  CLI with a throwaway HOME and a copy of the forge's `forge-bonsai2` provider entry, `--max-turns 8 --confine-to-cwd`.
-  The prompt told the parent to delegate "fix add() in src/math.js" to a subagent with `max_turns 6` and not to edit
-  files itself. It finished in 65 s, exit 0. `src/math.js` was fixed (`add(2,3) = 5`), and the parent answered:
-  "The subagent fixed `add` in src/math.js so it returns `a + b` instead of `a - b`. It ran on the model
-  forge-bonsai2/bonsai2-27b". Evidence limit: the throwaway HOME (with the child's session and output dir) was deleted
-  by my script, so the claim that a child did the edit rests on the parent's answer. The `provider/model` wording
-  matches the result footer, but that is indirect. VERIFY-RUN
-  Log: `~/apps/fleet/logs/sando-subagents-bonsai.log`.
+- **Real model: Bonsai 2 27B on :8100.** It was already running in jarvis mode; I took the GPU-job lock (waited about
+  1 h and later 2.4 h behind Harness² round 3, never forced) and did not touch forge-mode. Two runs of the built CLI,
+  each with a throwaway HOME, a copy of the forge's `forge-bonsai2` provider entry, and
+  `--max-turns 8 --confine-to-cwd`. The prompt: delegate "fix add() in src/math.js" to a subagent with `max_turns 6`,
+  and don't edit files yourself. **Both passed:** 65 s, exit 0, `add(2,3) = 5`. The parent answered "The subagent
+  changed `src/math.js` … It ran on the model `forge-bonsai2/bonsai2-27b`".
+  - Run 2 kept its HOME so I could check the model I/O logs. The parent made exactly one tool call (`Agent`), then
+    answered.
+  - The child ran in its own session (`sess_subagent_agent_…`, 23 tools offered) and did `Read` → `Edit` → answer.
+  - The parent received the footer `model: forge-bonsai2/bonsai2-27b`, `files_touched: src/math.js`, `turn_cap: 6`,
+    `tool_uses: 2`, `duration_ms: 29497`, `subagent_tokens: 82701`.
+  - That last number is the small-model problem below, seen on a real model: three child steps cost ~83k tokens,
+    mostly the inherited tool schemas.
+  - Logs: `~/apps/fleet/logs/sando-subagents-bonsai{,2}.log`. The temp HOMEs are deleted.
 
 ### Important for small models
 A `general-purpose` child costs about **111 KB (~28k tokens)** before doing anything, because it inherits all 23 tools
