@@ -67,12 +67,41 @@ The slot is owned by the runner, acquired and released around exactly one `runEx
 choice is owned by the tool handler (resolution) and the runtime glue (`runtime/methods/subagent.ts`, which builds the
 model). The UI only reads `AgentCompletedOutput`.
 
+### Context cost: use an allowlisted agent on small models
+Measured on the scripted e2e server (first request, bytes of messages + tool schemas):
+
+| request | bytes | about |
+|---|---|---|
+| parent (all tools) | 129,037 | 32k tokens |
+| `general-purpose` child (inherits 23 tools) | 111,313 | 28k tokens |
+| `.zcode/agents/reviewer.md` child (`tools: Read, Grep`) | 7,660 | 2k tokens |
+
+A `general-purpose` child alone fills a 32k window. On forge models, give children an allowlist, for example
+`~/.zcode/agents/worker.md`:
+```markdown
+---
+name: worker
+description: Small-context worker for one self-contained coding job (read, edit, run).
+tools: Read, Write, Edit, Bash, Grep, Glob
+maxTurns: 20
+---
+Do the one job you are given, run what you changed, then report.
+```
+
+### Profile models
+A profile `model: provider/model` without `thoughtLevel` now gets the registry's default reasoning level (it used to fail
+with "Reasoning level is required"), the same as the per-call `model`.
+
 ## Web workbench
 The `Agent` row is a collapsible card. Collapsed, it is the upstream one-line summary (agent type, description, status).
 Expanded, it shows a result panel (status, model, turn cap, tool uses, duration, files touched, the returned text), then
 the prompt and the child's tool calls. "Open on the right" still opens the full child session.
 
 ## Not done
+- Resuming a stopped child with `SendMessage` goes back to the profile / parent model, not a per-call `model` (the
+  per-call choice is not stored in the task snapshot).
+- The card change replaces upstream's click-to-open-side-pane row. Upstream desktop e2e specs that click the row
+  (`TID_V4_SUBAGENT_OPEN_SIDE_PANE`) need to click the button inside the expanded card instead (same test id).
 - No per-file locking between parallel children.
 - Files changed by Bash are not listed in `files_touched`.
 - The cap is per parent session, not per GPU. Two sessions can each run 2 children.
