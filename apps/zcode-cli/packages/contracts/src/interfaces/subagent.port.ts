@@ -19,6 +19,10 @@ export interface SubagentRunRequest {
   workingDirectory: string;
   workspaceRoot: string;
   trace: TraceContext;
+  /** Sando: per-call model, already resolved by the Agent tool; beats the profile's model, loses to Core Server overrides. */
+  modelSelection?: ModelSelection;
+  /** Sando: per-call model-step cap; can only lower the profile / parent cap. */
+  maxTurns?: number;
 }
 
 export interface SubagentRunOptions {

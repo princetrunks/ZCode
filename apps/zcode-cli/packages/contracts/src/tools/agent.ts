@@ -22,8 +22,25 @@ export const AgentInputSchema = z.object({
     .string()
     .optional()
     .describe("The type of specialized agent to use for this task"),
-  // subagent 模型由 Settings / Markdown profile 统一决定；若把调用级
-  // model 暴露给父模型，历史 tool call 会持续生成旧 override 并覆盖当前配置。
+  // Sando: per-call model and turn cap (SANDO-SUBAGENTS.md). Upstream left the model to Settings / the
+  // Markdown profile only; a historical tool call is never re-executed, so a per-call model cannot override
+  // later configuration. The handler resolves it through ModelCatalogPort before any child exists.
+  model: z
+    .string()
+    .min(1)
+    .optional()
+    .describe(
+      "Model for this agent: `provider/model` or a bare model id as ListModels prints it. Omit to use the agent type's model, else yours.",
+    ),
+  max_turns: z
+    .number()
+    .int()
+    .min(1)
+    .max(200)
+    .optional()
+    .describe(
+      "Model steps the agent may take; the last one answers without tools. Can only lower the configured cap.",
+    ),
   run_in_background: z
     .boolean()
     .optional()
@@ -52,6 +69,15 @@ export interface AgentCompletedOutput {
   totalDurationMs: number;
   totalTokens?: number;
   usage?: ModelUsage;
+  /** Sando: `provider/model` the child ran on. */
+  model?: string;
+  /** Sando: workspace files the child changed through Write / Edit / NotebookEdit (successful calls only). */
+  filesTouched?: string[];
+  /** Sando: model-step cap the child ran under. */
+  turnCap?: number;
+  /** Sando: the child's text was cut to the result byte budget; the full text is in `resultFile`. */
+  resultTruncated?: boolean;
+  resultFile?: string;
 }
 
 export interface AgentBackgroundedOutput {
@@ -88,6 +114,11 @@ export const AgentCompletedOutputSchema = z
     totalDurationMs: z.number().int().nonnegative(),
     totalTokens: z.number().int().nonnegative().optional(),
     usage: z.record(z.unknown()).optional(),
+    model: z.string().optional(),
+    filesTouched: z.array(z.string()).optional(),
+    turnCap: z.number().int().positive().optional(),
+    resultTruncated: z.boolean().optional(),
+    resultFile: z.string().optional(),
   })
   .strict();
 

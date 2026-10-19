@@ -55,6 +55,14 @@ import {
   type OfficialCuaPolicy,
 } from "../../subagent/computer-use-policy.js";
 import { computeOfficialCuaServerNames } from "./mcp.js";
+import { createFilesTouchedCollector } from "../../subagent/files-touched.js";
+import {
+  DEFAULT_SUBAGENT_RESULT_MAX_BYTES,
+  resolveSubagentResultMaxBytes,
+} from "../../subagent/result-budget.js";
+
+/** Sando: model steps a child may take when neither the call, its profile nor the parent sets a cap. */
+export const DEFAULT_SUBAGENT_TURN_CAP = 30;
 
 export function createDefaultSubagentPort(
   this: AgentRuntimeInternal,
@@ -68,6 +76,8 @@ export function createDefaultSubagentPort(
     logger: this.logger,
     inactivityTimeoutMs: this.config.subagents?.inactivityTimeoutMs,
     autoBackgroundMs: this.config.subagents?.autoBackgroundMs,
+    maxParallel: this.config.subagents?.maxParallel,
+    resultMaxBytes: this.config.subagents?.resultMaxBytes,
     outputRootDir: this.config.subagents?.outputRootDir,
     profiles: this.config.subagents?.profiles,
     builtInModelSelectionOverrides: this.config.subagents?.builtInModelSelectionOverrides,
@@ -98,7 +108,12 @@ export function createDefaultSubagentPort(
           ? this.contextSourceSnapshot?.userInstructions
           : undefined;
       const { selection: profileChildSelection, hasConcreteModel } = resolveSubagentSelection({
-        profileSelection: request.profile.modelSelection,
+        // Sando: a per-call `model` (already resolved by the Agent tool) takes the profile's place, so it
+        // gets the same registry validation and the same "never fall back to the parent" rule.
+        profileSelection: withCatalogDefaultReasoningLevel(
+          request.modelSelection ?? request.profile.modelSelection,
+          this.modelCatalogPort,
+        ),
         parentSelection: this.getSessionModelSelection(),
         overrideSelection: options?.modelOverride?.selection,
         resolveSelection: deps.resolveEffectiveModelSelection,
@@ -138,7 +153,19 @@ export function createDefaultSubagentPort(
       });
       // 空 agent prompt 不是一个语义段；先硬拼 `\n\n` 会把缺失段的边界
       // 泄漏到 persistent Memory 开头。这里只组合非空正文，block 左边界由 builder 统一添加。
-      const agentPrompt = [baseAgentPrompt, persistentMemory?.prompt]
+      const resultMaxBytes = resolveSubagentResultMaxBytes(
+        this.config.subagents?.resultMaxBytes ?? DEFAULT_SUBAGENT_RESULT_MAX_BYTES,
+      );
+      // Sando: cap = min(call, profile, parent --max-turns), else the configured / built-in default.
+      const turnCap =
+        minDefinedTurnCap(request.maxTurns, this.config.maxModelStepsPerTurn) ??
+        this.config.subagents?.defaultTurnCap ??
+        DEFAULT_SUBAGENT_TURN_CAP;
+      const agentPrompt = [
+        baseAgentPrompt,
+        persistentMemory?.prompt,
+        buildSubagentResultDisciplinePrompt({ resultMaxBytes, turnCap }),
+      ]
         .filter((part): part is string => typeof part === "string" && part.length > 0)
         .join("\n\n");
       const childRuntimeEnvInfo = {
@@ -225,6 +252,7 @@ export function createDefaultSubagentPort(
         },
       );
       const mirroredToolNameByChildToolCallId = new Map<string, string>();
+      const filesTouched = createFilesTouchedCollector(request.workspaceRoot);
       let sessionReadyNotified = false;
       const notifySessionReady = async () => {
         if (sessionReadyNotified) return;
@@ -267,6 +295,8 @@ export function createDefaultSubagentPort(
           },
           agentName: `zcode-${request.agentType}`,
           maxTurns: request.maxTurns ?? this.config.subagents?.maxTurns ?? 4,
+          // Sando: the cap that is actually enforced (upstream `maxTurns` never was).
+          maxModelStepsPerTurn: turnCap,
           parentSessionId: this.sessionId,
           taskType: "subagent_child",
           // 动态工作流灰度门必须结构性继承：
@@ -332,6 +362,7 @@ export function createDefaultSubagentPort(
           eventSink: {
             onSessionEvent: async (event) => {
               request.reportActivity?.();
+              filesTouched.observe(event);
               // child runtime 的事件已经按 childSessionId 落库，但旧链路只把
               // 少量工具事件镜像给 parent sink，导致 UI 订阅 child topic 后只能拿到打开时
               // 的 hydration，后续流式内容不会更新。raw child event 只通知父 runtime 的
@@ -396,7 +427,7 @@ export function createDefaultSubagentPort(
       }
       request.registerMessageSink?.(createSubagentMessageSink(childRuntime, request));
       try {
-        return await childRuntime.executeTurn(request.prompt, undefined, {
+        const turnResult = await childRuntime.executeTurn(request.prompt, undefined, {
           abortSignal: options?.signal,
           // 子 Runtime 的首轮输入来自父 Agent，而不是真实用户直接输入；保留源事实，避免
           // Subagent Turn 在 Trace 和成功率报表里被误归类为 user。
@@ -404,6 +435,12 @@ export function createDefaultSubagentPort(
           inputPresentation: "coordinator_input",
           traceContext: request.traceContext,
         });
+        return {
+          ...turnResult,
+          model: `${childSelection.providerId}/${childSelection.modelId}`,
+          filesTouched: filesTouched.list(),
+          turnCap,
+        };
       } finally {
         const cancelled = options?.signal?.aborted === true;
         childRuntime.sealBackgroundTaskNotifications({
@@ -419,6 +456,47 @@ export function createDefaultSubagentPort(
       }
     },
   });
+}
+
+/**
+ * Sando: a profile `model: provider/model` without `thoughtLevel` used to fail with "Reasoning level is required"
+ * for any model that has levels. Fill the registry default instead, the same as the per-call `model` and the
+ * workflow `subagent_model` (resolveModelReference) already do. An explicit level is kept as written.
+ */
+function withCatalogDefaultReasoningLevel(
+  selection: ModelSelection | undefined,
+  catalog: AgentRuntimeInternal["modelCatalogPort"],
+): ModelSelection | undefined {
+  if (!selection || selection.options?.reasoningLevel || !catalog) return selection;
+  const entry = catalog
+    .listModels()
+    .find(
+      (candidate) =>
+        candidate.providerId === selection.providerId && candidate.modelId === selection.modelId,
+    );
+  const level = entry?.defaultReasoningLevel;
+  return level
+    ? { ...selection, options: { ...selection.options, reasoningLevel: level } }
+    : selection;
+}
+
+function minDefinedTurnCap(...values: Array<number | undefined>): number | undefined {
+  const defined = values.filter(
+    (value): value is number => typeof value === "number" && Number.isInteger(value) && value > 0,
+  );
+  return defined.length > 0 ? Math.min(...defined) : undefined;
+}
+
+/** Sando: small-context discipline, told to every child (SANDO-SUBAGENTS.md). */
+function buildSubagentResultDisciplinePrompt(input: {
+  resultMaxBytes: number;
+  turnCap: number;
+}): string {
+  return [
+    "# Reporting back",
+    `Your final message is the only thing the calling agent receives, and it is cut at about ${input.resultMaxBytes} bytes. Lead with the answer or outcome, then list the files you changed, then anything the caller must check. Do not replay your steps or paste whole files.`,
+    `You have at most ${input.turnCap} model steps; the last one runs without tools, so finish the work before then.`,
+  ].join("\n");
 }
 
 function resolveSubagentEmbeddedSearchEnabled(): boolean {
