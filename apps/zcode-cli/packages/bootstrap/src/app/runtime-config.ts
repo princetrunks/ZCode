@@ -279,7 +279,10 @@ function resolveMaxModelStepsPerTurn(
 
 function resolveSandoSubagentEnv(
   env: Readonly<Record<string, string | undefined>>,
-): Pick<NonNullable<AgentRuntimeConfig["subagents"]>, "maxParallel" | "resultMaxBytes" | "defaultTurnCap"> {
+): Pick<
+  NonNullable<AgentRuntimeConfig["subagents"]>,
+  "maxParallel" | "resultMaxBytes" | "defaultTurnCap"
+> {
   const read = (name: string, min: number): number | undefined => {
     const raw = env[name]?.trim();
     if (!raw) return undefined;

@@ -475,7 +475,9 @@ function withCatalogDefaultReasoningLevel(
         candidate.providerId === selection.providerId && candidate.modelId === selection.modelId,
     );
   const level = entry?.defaultReasoningLevel;
-  return level ? { ...selection, options: { ...selection.options, reasoningLevel: level } } : selection;
+  return level
+    ? { ...selection, options: { ...selection.options, reasoningLevel: level } }
+    : selection;
 }
 
 function minDefinedTurnCap(...values: Array<number | undefined>): number | undefined {

@@ -14,6 +14,11 @@ import type { ToolCallBlockRenderContext } from "../shared.js";
 import { getLatestExploreChildSummaryFromChildren } from "./explore.js";
 import { AgentPromptSection } from "./agentPromptSection.js";
 import {
+  AgentOpenSessionButton,
+  AgentResultSection,
+  useAgentResultSummary,
+} from "./agentResultSection.js";
+import {
   formatAgentMessage,
   getAgentColor,
   getAgentKindLabel,
@@ -259,6 +264,11 @@ export function AgentToolCallBlock(context: ToolCallBlockRenderContext) {
     : null;
   const backgroundAgentInfo = readBackgroundAgentInfo(toolCall);
   const activityContent = getAgentActivityContent(toolCall);
+  const resultSummary = useAgentResultSummary(
+    isAgentVisuallyRunning,
+    toolCall.output,
+    activityContent,
+  );
   const activityThought = toolCall.thought?.trim();
   // Agent 块和它内部的子工具都已经通过层级表达了来源，
   // 继续显示子智能体来源 badge 会制造重复噪音。
@@ -271,23 +281,15 @@ export function AgentToolCallBlock(context: ToolCallBlockRenderContext) {
     () => <span className="truncate">{primaryText}</span>,
     [primaryText],
   );
-  const summaryAction = useMemo(
-    () =>
-      context.agentSummaryAction
-        ? {
-            ...context.agentSummaryAction,
-            ariaLabel: formatAgentMessage(
-              intl,
-              "chat.toolCall.agent.openInSidePane",
-              "Open on the right",
-            ),
-          }
-        : undefined,
-    [context.agentSummaryAction, intl],
-  );
+  // Sando: the side-pane action moves from the summary row to a button inside the card (same test id).
+  const openSessionAction = context.agentSummaryAction;
   const renderContent = useCallback(
     () => (
       <div className="ml-2 space-y-3 border-border border-l pl-3.5">
+        {resultSummary ? (
+          <AgentResultSection summary={resultSummary} status={toolCall.status} context={context} />
+        ) : null}
+        {openSessionAction ? <AgentOpenSessionButton action={openSessionAction} /> : null}
         {backgroundAgentInfo ? (
           <BackgroundAgentProcessSection
             outputFile={backgroundAgentInfo.outputFile}
@@ -319,7 +321,7 @@ export function AgentToolCallBlock(context: ToolCallBlockRenderContext) {
             onOpenBrowserUrl={context.onOpenBrowserUrl}
           />
         ) : null}
-        {activityContent ? (
+        {activityContent && !resultSummary ? (
           <AgentActivitySection
             label={formatAgentMessage(intl, "chat.toolCall.agent.output", "Agent output")}
             content={activityContent}
@@ -358,7 +360,9 @@ export function AgentToolCallBlock(context: ToolCallBlockRenderContext) {
       context.workspacePath,
       intl,
       isAgentVisuallyRunning,
+      openSessionAction,
       prompt,
+      resultSummary,
       toolCall.status,
     ],
   );
@@ -369,11 +373,10 @@ export function AgentToolCallBlock(context: ToolCallBlockRenderContext) {
         toolId={toolCall.toolId}
         icon={AGENT_TOOL_ICON}
         showIcon={context.showIcon !== false}
-        canToggle={false}
+        canToggle
         forceOpen={false}
-        summaryAction={summaryAction}
-        // 产品边界：Agent/Task 在父对话中只保留单行摘要；完整 child timeline 统一从
-        // 右侧 tab / 手机抽屉查看，因此这里既不自动展开，也不提供手动展开入口。
+        // Sando (SANDO-SUBAGENTS.md): expands in place to the result (status, model, files, text) instead of
+        // upstream's one-line row; the full child timeline is a button inside (side pane / phone drawer).
         kindLabel={fallbackLabel}
         expandedKindLabel={fallbackLabel}
         kindDetail={agentNameDetail}
@@ -384,7 +387,7 @@ export function AgentToolCallBlock(context: ToolCallBlockRenderContext) {
           collapsedChildSummary ? collapsedChildSummary.primaryText : collapsedPrimaryText
         }
         expandedPrimaryText={expandedPrimaryText}
-        secondaryText={collapsedChildSummary?.secondaryText}
+        secondaryText={collapsedChildSummary?.secondaryText ?? resultSummary?.model}
         expandedSecondaryText={null}
         summaryContentSeparator="·"
         animateSummaryContent

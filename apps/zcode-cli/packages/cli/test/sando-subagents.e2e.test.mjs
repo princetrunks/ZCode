@@ -132,7 +132,11 @@ test("a child runs on its own model and context, and returns only a compact resu
       if (q.role === "child")
         return q.lastTool
           ? { text: "CHILD-RESULT: wrote notes.md" }
-          : { calls: [{ name: "Write", args: { file_path: "notes.md", content: "TRANSCRIPT-ONLY-9\n" } }] };
+          : {
+              calls: [
+                { name: "Write", args: { file_path: "notes.md", content: "TRANSCRIPT-ONLY-9\n" } },
+              ],
+            };
       return { text: "ok" };
     },
     ["-p", "PARENT-PROMPT-1: delegate the notes", "--mode", "yolo", "--json"],
@@ -142,12 +146,18 @@ test("a child runs on its own model and context, and returns only a compact resu
   for (const c of r.children) {
     assert.equal(c.model, "model-b", "the child runs on the model the call asked for");
     assert.ok(!toolNames(c).includes("Agent") && !toolNames(c).includes("Task"), "no nesting");
-    assert.ok(!c.all.includes("PARENT-PROMPT-1"), "the child does not see the parent's conversation");
+    assert.ok(
+      !c.all.includes("PARENT-PROMPT-1"),
+      "the child does not see the parent's conversation",
+    );
   }
   assert.ok(r.children[0].all.includes("CHILD-TASK-7"));
   assert.match(r.children[0].system, /cut at about 6000 bytes/);
   assert.match(r.children[0].system, /at most 5 model steps/);
-  assert.ok(r.parent.every((p) => p.model === "model-a"), "the parent stays on its own model");
+  assert.ok(
+    r.parent.every((p) => p.model === "model-a"),
+    "the parent stays on its own model",
+  );
   const result = r.parent.at(-1).lastTool;
   assert.match(result, /CHILD-RESULT: wrote notes\.md/);
   assert.match(result, /model: fake-b\/model-b/);
@@ -166,7 +176,10 @@ test("max_turns caps the child: exactly that many steps, the last one without to
         return q.lastTool
           ? { text: "PARENT-DONE" }
           : { calls: [agentCall({ prompt: "read forever", max_turns: 2 })] };
-      if (q.role === "child") return q.tools.includes("Read") ? { calls: [{ name: "Read", args: { file_path: "README.md" } }] } : { text: "CAPPED-ANSWER" };
+      if (q.role === "child")
+        return q.tools.includes("Read")
+          ? { calls: [{ name: "Read", args: { file_path: "README.md" } }] }
+          : { text: "CAPPED-ANSWER" };
       return { text: "ok" };
     },
     ["-p", "delegate", "--mode", "yolo", "--json"],
@@ -210,7 +223,9 @@ test("a long child answer is cut to the byte budget; the full text is saved for 
   const r = await sando(
     (q) => {
       if (q.role === "parent")
-        return q.lastTool ? { text: "PARENT-DONE" } : { calls: [agentCall({ prompt: "report at length" })] };
+        return q.lastTool
+          ? { text: "PARENT-DONE" }
+          : { calls: [agentCall({ prompt: "report at length" })] };
       if (q.role === "child") return { text: long };
       return { text: "ok" };
     },
@@ -231,9 +246,13 @@ test("--confine-to-cwd reaches the child: Read outside the workspace is refused"
   const r = await sando(
     (q) => {
       if (q.role === "parent")
-        return q.lastTool ? { text: "PARENT-DONE" } : { calls: [agentCall({ prompt: "peek outside" })] };
+        return q.lastTool
+          ? { text: "PARENT-DONE" }
+          : { calls: [agentCall({ prompt: "peek outside" })] };
       if (q.role === "child")
-        return q.lastTool ? { text: "CHILD-SAW-REFUSAL" } : { calls: [{ name: "Read", args: { file_path: "/etc/hostname" } }] };
+        return q.lastTool
+          ? { text: "CHILD-SAW-REFUSAL" }
+          : { calls: [{ name: "Read", args: { file_path: "/etc/hostname" } }] };
       return { text: "ok" };
     },
     ["-p", "delegate", "--mode", "yolo", "--json", "--confine-to-cwd"],
@@ -268,7 +287,9 @@ test("an unknown model fails the call with candidates and starts no child", asyn
   const r = await sando(
     (q) => {
       if (q.role === "parent")
-        return q.lastTool ? { text: "PARENT-DONE" } : { calls: [agentCall({ prompt: "x", model: "nope/none" })] };
+        return q.lastTool
+          ? { text: "PARENT-DONE" }
+          : { calls: [agentCall({ prompt: "x", model: "nope/none" })] };
       return { text: "should not run" };
     },
     ["-p", "delegate", "--mode", "yolo", "--json"],

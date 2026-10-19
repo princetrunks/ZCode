@@ -23,7 +23,10 @@ export function startFakeOpenAI() {
       const all = msgs.map(text).join("\n") + JSON.stringify(j.tools || []);
       const lastTool = [...msgs].reverse().find((m) => m.role === "tool");
       const tools = (j.tools || []).map((t) => t.function?.name);
-      const system = msgs.filter((m) => m.role === "system").map(text).join("\n");
+      const system = msgs
+        .filter((m) => m.role === "system")
+        .map(text)
+        .join("\n");
       const n = state.requests.push({
         model: j.model,
         toolCount: tools.length,

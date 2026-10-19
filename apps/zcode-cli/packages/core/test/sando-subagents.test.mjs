@@ -7,9 +7,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-const { createSubagentSlotGate, resolveSubagentMaxParallel } = await import(
-  "../dist/subagent/slot-gate.js"
-);
+const { createSubagentSlotGate, resolveSubagentMaxParallel } =
+  await import("../dist/subagent/slot-gate.js");
 const { budgetSubagentResult, truncateUtf8, formatFilesTouched, resolveSubagentResultMaxBytes } =
   await import("../dist/subagent/result-budget.js");
 const { createFilesTouchedCollector } = await import("../dist/subagent/files-touched.js");
@@ -52,7 +51,10 @@ test("slot gate: never more than the cap at once, FIFO, abort leaves the queue",
 
 test("slot gate: a failing child frees its slot; knob parsing", async () => {
   const gate = createSubagentSlotGate(1);
-  await assert.rejects(gate.run(async () => Promise.reject(new Error("boom"))), /boom/);
+  await assert.rejects(
+    gate.run(async () => Promise.reject(new Error("boom"))),
+    /boom/,
+  );
   assert.equal(gate.active(), 0);
   assert.equal(resolveSubagentMaxParallel(undefined), 2);
   assert.equal(resolveSubagentMaxParallel("3"), 3);
@@ -87,8 +89,14 @@ test("files touched: successful writes only, workspace-relative, Bash ignored", 
     type: "tool_call_scheduled",
     payload: { toolCallId: id, toolName, input },
   });
-  const ok = (id) => ({ type: "tool_call_result", payload: { toolCallId: id, result: { success: true } } });
-  const fail = (id) => ({ type: "tool_call_result", payload: { toolCallId: id, result: { success: false } } });
+  const ok = (id) => ({
+    type: "tool_call_result",
+    payload: { toolCallId: id, result: { success: true } },
+  });
+  const fail = (id) => ({
+    type: "tool_call_result",
+    payload: { toolCallId: id, result: { success: false } },
+  });
   const err = (id) => ({ type: "tool_call_error", payload: { toolCallId: id, error: {} } });
   c.observe(sched("1", "Write", { file_path: "/w/proj/src/a.ts" }));
   c.observe(sched("2", "Edit", { file_path: "/etc/hosts" }));
@@ -152,7 +160,12 @@ const launchRequest = (extra = {}) => {
     prompt: "do a self-contained job",
     workingDirectory: base,
     workspaceRoot: base,
-    trace: { traceId: `trace_${n}`, spanId: `span_${n}`, sessionId: "sess_parent", turnId: "turn_1" },
+    trace: {
+      traceId: `trace_${n}`,
+      spanId: `span_${n}`,
+      sessionId: "sess_parent",
+      turnId: "turn_1",
+    },
     ...extra,
   };
 };
@@ -170,7 +183,13 @@ test("port: three parallel launches run at most two at once and all complete", a
 
 test("port: per-call model and max_turns reach the child; max_turns only lowers the profile cap", async () => {
   const profiles = [
-    { name: "capped", description: "capped agent", source: "project", systemPrompt: "x", maxTurns: 5 },
+    {
+      name: "capped",
+      description: "capped agent",
+      source: "project",
+      systemPrompt: "x",
+      maxTurns: 5,
+    },
   ];
   const { port, calls } = makePort({ profiles });
   const out = await port.launch(
@@ -203,7 +222,13 @@ const catalog = {
   listModels: () => [
     { providerId: "fake-a", modelId: "model-a", reasoningLevels: [], current: true },
     { providerId: "fake-b", modelId: "model-b", reasoningLevels: [], current: false },
-    { providerId: "off", modelId: "model-off", reasoningLevels: [], current: false, disabledReason: "no key" },
+    {
+      providerId: "off",
+      modelId: "model-off",
+      reasoningLevels: [],
+      current: false,
+      disabledReason: "no key",
+    },
   ],
 };
 
@@ -227,16 +252,25 @@ function handlerContext(launches) {
 test("Agent tool: `model` resolves through the catalog before any child exists", async () => {
   const launches = [];
   const ctx = handlerContext(launches);
-  await agentToolEntry.handler({ description: "d", prompt: "p", model: "model-b", max_turns: 4 }, ctx);
+  await agentToolEntry.handler(
+    { description: "d", prompt: "p", model: "model-b", max_turns: 4 },
+    ctx,
+  );
   assert.deepEqual(launches[0].modelSelection, { providerId: "fake-b", modelId: "model-b" });
   assert.equal(launches[0].maxTurns, 4);
 
-  const unknown = await agentToolEntry.handler({ description: "d", prompt: "p", model: "nope/x" }, ctx);
+  const unknown = await agentToolEntry.handler(
+    { description: "d", prompt: "p", model: "nope/x" },
+    ctx,
+  );
   assert.equal(unknown.result, false);
   assert.match(unknown.message, /agent_model_not_found/);
   assert.match(unknown.message, /fake-b\/model-b/, "the error lists candidates");
 
-  const disabled = await agentToolEntry.handler({ description: "d", prompt: "p", model: "off/model-off" }, ctx);
+  const disabled = await agentToolEntry.handler(
+    { description: "d", prompt: "p", model: "off/model-off" },
+    ctx,
+  );
   assert.equal(disabled.result, false);
   assert.match(disabled.message, /agent_model_disabled/);
 
