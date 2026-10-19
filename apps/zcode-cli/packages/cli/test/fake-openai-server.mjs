@@ -3,6 +3,7 @@
 // "inside": Read(README.md) once. "text": answer at once. Each request is recorded in `requests`.
 // `state.handler(req)` (subagent e2e) overrides the scenarios: it returns { calls: [{ name, args }], text, delayMs }.
 // `state.inflight` / `state.peakInflight` count requests being answered at once.
+// A function scenario gets ({ msgs, tools, lastTool }) and returns null (answer) or { name, args } (one tool call).
 import http from "node:http";
 
 export function startFakeOpenAI() {
@@ -46,6 +47,10 @@ export function startFakeOpenAI() {
         state.peakInflight = Math.max(state.peakInflight, state.inflight);
         if (decision.delayMs) await new Promise((r) => setTimeout(r, decision.delayMs));
         state.inflight -= 1;
+      } else if (typeof state.scenario === "function") {
+        // Same contract as the checkpoints branch: ({ msgs, tools, lastTool }) -> null (answer) or { name, args }.
+        const picked = state.scenario({ msgs, tools, lastTool: lastTool ? text(lastTool) : null });
+        if (picked && tools.includes(picked.name)) calls = [picked];
       } else if (tools.includes("Read")) {
         let call = null;
         if (state.scenario === "loop") call = { file_path: "README.md" };
