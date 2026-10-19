@@ -12,11 +12,18 @@ import {
   createCoreError,
   type AgentInput,
   type AgentOutput,
+  type ModelCatalogPort,
+  type ModelSelection,
   type TraceContext,
 } from "@zcode/contracts";
 import { TASK_TOOL_NAME } from "../compat.js";
-import type { ToolEntry, ToolHandler } from "../types.js";
+import type { ToolEntry, ToolHandler, ToolHandlerFailure } from "../types.js";
 import { formatAgentProfilesForPrompt, type AgentProfile } from "../../subagent/profile.js";
+import { formatFilesTouched } from "../../subagent/result-budget.js";
+import { resolveModelReference } from "./model-reference.js";
+
+/** Sando: per-call `model` could not be resolved (SANDO-SUBAGENTS.md). */
+const AGENT_MODEL_ERROR_CODE = { CATALOG_UNAVAILABLE: 41, UNRESOLVED: 42 } as const;
 
 const MAX_AGENT_MODEL_BYTES = 120_000;
 
@@ -46,6 +53,11 @@ const AGENT_TOOL_OUTPUT_SCHEMA = {
         totalDurationMs: { type: "integer", minimum: 0 },
         totalTokens: { type: "integer", minimum: 0 },
         usage: { type: "object", additionalProperties: true },
+        model: { type: "string" },
+        filesTouched: { type: "array", items: { type: "string" } },
+        turnCap: { type: "integer", minimum: 1 },
+        resultTruncated: { type: "boolean" },
+        resultFile: { type: "string" },
       },
       required: ["status", "agentId", "prompt", "content", "totalToolUseCount", "totalDurationMs"],
       additionalProperties: false,
@@ -113,7 +125,10 @@ function buildAgentProviderDescription(
     "- The agent's final message is returned to you as the tool result; it is not shown to the user — relay what matters.",
     "- A new Agent call starts fresh, so the prompt must be self-contained.",
     "- `run_in_background: true` runs the agent asynchronously; you'll be notified when it completes.",
-    "- When you launch multiple agents for independent work, send them in a single message with multiple tool uses so they run concurrently.",
+    "- When you launch multiple agents for independent work, send them in a single message with multiple tool uses so they run concurrently. Only a few run at once (default 2); the rest wait for a free slot.",
+    "- Parallel agents share your workspace with no file locking: give each one different files, or read-only work.",
+    "- `model` picks the agent's model (`provider/model` or a bare id, as ListModels prints it); omit it to use the agent type's model, else yours. `max_turns` caps its model steps.",
+    "- You get back only the agent's final message (cut to a byte budget) plus the model, the files it changed and its usage, never its transcript.",
     // 只保留「用户点名工作流」这一种情形：工作流一律由用户显式请求触发，与系统提示词其余
     // 部分一致。不能把「结果层层喂给下一步的多代理编排」也划给 CreateWorkflow，
     // 那等于让模型在用户没开口时自行选择工作流。
@@ -139,6 +154,11 @@ function formatAgentOutputForModel(output: unknown): string {
     const childContent =
       childText.trim().length > 0 ? [childText] : ["(Subagent completed but returned no output.)"];
     const usageLines = [
+      ...(data.model === undefined ? [] : [`model: ${data.model}`]),
+      ...(data.filesTouched === undefined
+        ? []
+        : [`files_touched: ${formatFilesTouched(data.filesTouched)}`]),
+      ...(data.turnCap === undefined ? [] : [`turn_cap: ${data.turnCap}`]),
       ...(data.totalTokens === undefined ? [] : [`subagent_tokens: ${data.totalTokens}`]),
       `tool_uses: ${data.totalToolUseCount}`,
       `duration_ms: ${data.totalDurationMs}`,
@@ -190,6 +210,15 @@ const agentHandler: ToolHandler = async (input, context) => {
     );
   }
 
+  // Sando: resolve a per-call model before any child exists, so a bad name costs one tool error,
+  // not a half-started child (same resolver and catalog as the workflow `subagent_model`).
+  let modelSelection: ModelSelection | undefined;
+  if (parsed.model !== undefined) {
+    const resolved = resolveAgentModel(parsed.model, context.modelCatalogPort);
+    if ("result" in resolved) return resolved;
+    modelSelection = resolved.selection;
+  }
+
   const request = {
     sessionId: context.sessionId,
     turnId: context.turnId,
@@ -200,6 +229,8 @@ const agentHandler: ToolHandler = async (input, context) => {
     callerCanReadOutputFile: canReadBackgroundOutputFile(context.providerVisibleToolNames),
     workingDirectory: context.workingDirectory,
     workspaceRoot: context.workspaceRoot,
+    ...(modelSelection ? { modelSelection } : {}),
+    ...(parsed.max_turns === undefined ? {} : { maxTurns: parsed.max_turns }),
     trace: {
       traceId: context.traceId,
       spanId: context.spanId,
@@ -278,6 +309,29 @@ export const agentToolEntry: ToolEntry = {
     recordOutput: "summary",
   },
 };
+
+function resolveAgentModel(
+  text: string,
+  port: ModelCatalogPort | undefined,
+): { selection: ModelSelection } | ToolHandlerFailure {
+  if (port === undefined) {
+    return {
+      result: false,
+      errorCode: AGENT_MODEL_ERROR_CODE.CATALOG_UNAVAILABLE,
+      message:
+        "agent_model_unavailable: this session has no model catalog, so `model` cannot be chosen. Omit `model`; the agent will use its type's model or yours.",
+    };
+  }
+  const resolution = resolveModelReference(text, port.listModels());
+  if (!resolution.ok) {
+    return {
+      result: false,
+      errorCode: AGENT_MODEL_ERROR_CODE.UNRESOLVED,
+      message: `agent_model_${resolution.reason}: ${resolution.message}`,
+    };
+  }
+  return { selection: resolution.selection };
+}
 
 function canReadBackgroundOutputFile(toolNames: readonly string[] | undefined): boolean {
   const names = new Set(toolNames ?? []);

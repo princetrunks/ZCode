@@ -148,6 +148,12 @@ export interface AgentRuntimeConfig {
     autoBackgroundMs?: number;
     backgroundBashMaxMs?: number;
     maxTurns?: number;
+    /** Sando: children executing at once (ZCODE_SUBAGENT_MAX_PARALLEL, default 2). */
+    maxParallel?: number;
+    /** Sando: byte budget for a child's returned message (ZCODE_SUBAGENT_RESULT_BYTES, default 6000). */
+    resultMaxBytes?: number;
+    /** Sando: child model-step cap when nothing else sets one (ZCODE_SUBAGENT_MAX_TURNS, default 30). */
+    defaultTurnCap?: number;
     outputRootDir?: string;
     profiles?: readonly AgentProfile[];
     builtInModelSelectionOverrides?: Partial<Record<"general-purpose" | "Explore", ModelSelection>>;

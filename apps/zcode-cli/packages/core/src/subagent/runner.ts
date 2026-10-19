@@ -51,6 +51,8 @@ import {
 import { EXPLORE_AGENT_ALLOWED_TOOLS } from "./explore-tools.js";
 import { formatLocalAgentTaskNotification } from "./completion-notification.js";
 import { filterSubagentChildToolNames } from "./tool-policy.js";
+import { createSubagentSlotGate, resolveSubagentMaxParallel } from "./slot-gate.js";
+import { budgetSubagentResult, resolveSubagentResultMaxBytes } from "./result-budget.js";
 import {
   ErrorPayloadRole,
   selectExecutionErrorMessage,
@@ -75,6 +77,8 @@ export interface ExploreSubagentRuntimeRequest {
   sessionId: SessionId;
   description: string;
   maxTurns?: number;
+  /** Sando: per-call model resolved by the Agent tool; beats the profile's model. */
+  modelSelection?: import("@zcode/shared").ModelSelection;
   /** child session 已持久化且可被 projection/query 读取后、首次模型执行前调用。 */
   onSessionReady?: () => Promise<void>;
   permissionMode?: AgentProfile["permissionMode"];
@@ -93,6 +97,12 @@ export interface ExploreSubagentRuntimeResult {
   response: string;
   traceId: TraceContext["traceId"];
   events: SessionEvent[];
+  /** Sando: `provider/model` the child actually ran on. */
+  model?: string;
+  /** Sando: files changed through successful Write / Edit / NotebookEdit calls. */
+  filesTouched?: readonly string[];
+  /** Sando: the model-step cap the child ran under. */
+  turnCap?: number;
 }
 
 export interface ParentTaskNotificationCommand {
@@ -125,10 +135,25 @@ export interface ExploreSubagentPortOptions {
   getAllowedTools?: (profile: AgentProfile) => readonly string[];
   inactivityTimeoutMs?: number;
   autoBackgroundMs?: number;
+  /** Sando: children executing at once (foreground + background); default 2. Over the cap a launch waits. */
+  maxParallel?: number;
+  /** Sando: byte budget for the child's final message returned to the parent; default 6000. */
+  resultMaxBytes?: number;
   logger?: Logger;
 }
 
-export function createExploreSubagentPort(options: ExploreSubagentPortOptions): SubagentPort {
+export function createExploreSubagentPort(rawOptions: ExploreSubagentPortOptions): SubagentPort {
+  // Sando: every child execution (foreground, background, SendMessage resume) goes through
+  // runExploreAgent, so gating that one function caps them all (SANDO-SUBAGENTS.md).
+  const slotGate = createSubagentSlotGate(resolveSubagentMaxParallel(rawOptions.maxParallel));
+  const options: ExploreSubagentPortOptions = {
+    ...rawOptions,
+    runExploreAgent: (request, runOptions) =>
+      slotGate.run(() => rawOptions.runExploreAgent(request, runOptions), {
+        signal: runOptions?.signal,
+        heartbeat: request.reportActivity,
+      }),
+  };
   const registry = options.runtimeTaskRegistry ?? new InMemoryRuntimeTaskRegistry();
   const abortControllers = new Map<string, AbortController>();
   const borrowedForegroundAgentIds = new Set<string>();
@@ -246,9 +271,7 @@ export function createExploreSubagentPort(options: ExploreSubagentPortOptions): 
                 parentToolCallId: request.parentToolCallId,
                 status: "running",
                 allowedTools: [...resolveAllowedTools(profile, options)],
-                model: profile.modelSelection
-                  ? `${profile.modelSelection.providerId}/${profile.modelSelection.modelId}`
-                  : undefined,
+                model: formatSelectionLabel(request.modelSelection ?? profile.modelSelection),
               },
             );
             readyGate.resolve();
@@ -494,9 +517,7 @@ export function createExploreSubagentPort(options: ExploreSubagentPortOptions): 
                 status: "running",
                 allowedTools: [...resolveAllowedTools(profile, options)],
                 outputFile: lifecycle.outputFile,
-                model: profile.modelSelection
-                  ? `${profile.modelSelection.providerId}/${profile.modelSelection.modelId}`
-                  : undefined,
+                model: formatSelectionLabel(request.modelSelection ?? profile.modelSelection),
               },
             );
             readyGate.resolve();
@@ -1143,7 +1164,9 @@ async function runAgentToCompletion(
       disallowedTools: lifecycle.profile.disallowedTools,
       sessionId: lifecycle.childSessionId,
       description: request.description,
-      maxTurns: lifecycle.profile.maxTurns,
+      // Sando: a per-call cap can only lower the profile's; the runtime glue folds in the parent cap.
+      maxTurns: minDefined(request.maxTurns, lifecycle.profile.maxTurns),
+      ...(request.modelSelection ? { modelSelection: request.modelSelection } : {}),
       onSessionReady: notifySessionReady,
       permissionMode: lifecycle.profile.permissionMode,
       prompt: request.prompt,
@@ -1166,6 +1189,11 @@ async function runAgentToCompletion(
   const totalTokens = usage?.totalTokens;
   const totalToolUseCount = resolveSubagentToolUseCount(childResult.events);
   const totalDurationMs = Date.now() - lifecycle.startedAt;
+  // Sando: only the final message goes back, cut to the byte budget (full text kept in result.md).
+  const budgeted = await budgetSubagentResult(childResult.response, {
+    maxBytes: resolveSubagentResultMaxBytes(options.resultMaxBytes),
+    resultFile: join(dirname(lifecycle.outputFile), "result.md"),
+  });
 
   const output: AgentCompletedOutput = {
     status: "completed",
@@ -1176,13 +1204,18 @@ async function runAgentToCompletion(
     content: [
       {
         type: "text",
-        text: childResult.response,
+        text: budgeted.text,
       },
     ],
     totalToolUseCount,
     totalDurationMs,
     ...(totalTokens === undefined ? {} : { totalTokens }),
     ...(usage === undefined ? {} : { usage }),
+    ...(childResult.model ? { model: childResult.model } : {}),
+    ...(childResult.filesTouched ? { filesTouched: [...childResult.filesTouched] } : {}),
+    ...(childResult.turnCap ? { turnCap: childResult.turnCap } : {}),
+    ...(budgeted.truncated ? { resultTruncated: true } : {}),
+    ...(budgeted.resultFile ? { resultFile: budgeted.resultFile } : {}),
   };
 
   return { events: childResult.events, output };
@@ -2134,6 +2167,17 @@ function resolveAllowedTools(
     baseTools.push("Skill");
   }
   return filterSubagentChildToolNames(baseTools, profile.disallowedTools);
+}
+
+function formatSelectionLabel(
+  selection: import("@zcode/shared").ModelSelection | undefined,
+): string | undefined {
+  return selection ? `${selection.providerId}/${selection.modelId}` : undefined;
+}
+
+function minDefined(...values: Array<number | undefined>): number | undefined {
+  const defined = values.filter((value): value is number => typeof value === "number");
+  return defined.length > 0 ? Math.min(...defined) : undefined;
 }
 
 async function writeTextFile(path: string, content: string): Promise<void> {

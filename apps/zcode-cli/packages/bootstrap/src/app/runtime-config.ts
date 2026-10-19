@@ -173,6 +173,8 @@ export function resolveAppRuntimeConfig(input: {
       input.pluginHooks,
     ),
     subagents: {
+      // Sando: ZCODE_SUBAGENT_MAX_PARALLEL / _RESULT_BYTES / _MAX_TURNS (SANDO-SUBAGENTS.md); explicit config wins.
+      ...resolveSandoSubagentEnv(options.env ?? process.env),
       ...options.runtimeConfig?.subagents,
       enabled: options.runtimeConfig?.subagents?.enabled ?? configResult.config.features.subagent,
       outputRootDir: options.runtimeConfig?.subagents?.outputRootDir ?? subagentOutputRootDir,
@@ -273,6 +275,28 @@ function resolveMaxModelStepsPerTurn(
     throw new Error(`--max-turns expects a positive whole number, got "${raw}"`);
   }
   return { maxModelStepsPerTurn: value };
+}
+
+function resolveSandoSubagentEnv(
+  env: Readonly<Record<string, string | undefined>>,
+): Pick<NonNullable<AgentRuntimeConfig["subagents"]>, "maxParallel" | "resultMaxBytes" | "defaultTurnCap"> {
+  const read = (name: string, min: number): number | undefined => {
+    const raw = env[name]?.trim();
+    if (!raw) return undefined;
+    const value = Number(raw);
+    if (!Number.isInteger(value) || value < min) {
+      throw new Error(`${name} expects a whole number >= ${min}, got "${raw}"`);
+    }
+    return value;
+  };
+  const maxParallel = read("ZCODE_SUBAGENT_MAX_PARALLEL", 1);
+  const resultMaxBytes = read("ZCODE_SUBAGENT_RESULT_BYTES", 512);
+  const defaultTurnCap = read("ZCODE_SUBAGENT_MAX_TURNS", 1);
+  return {
+    ...(maxParallel === undefined ? {} : { maxParallel }),
+    ...(resultMaxBytes === undefined ? {} : { resultMaxBytes }),
+    ...(defaultTurnCap === undefined ? {} : { defaultTurnCap }),
+  };
 }
 
 /** Sando: "provider/model" → a validated selection; models with reasoning levels get the highest one. */
