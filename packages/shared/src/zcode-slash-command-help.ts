@@ -160,12 +160,15 @@ export const BUILTIN_ZCODE_SLASH_COMMAND_HELP_ENTRIES: readonly BuiltinZCodeSlas
     },
     {
       details: [
-        "In the TUI, opens a checkpoint picker when called without arguments.",
-        "Use status to show the latest checkpoint, or latest/a checkpoint id to restore directly.",
+        "In the TUI, opens a turn picker when called without arguments, then asks: files and conversation, conversation only, or files only.",
+        "list shows each turn with its file edits and shell commands; to <turn> rewinds to just before that turn (default both).",
+        "force overwrites files changed outside the agent and skips checkpoints that cannot be used; undo reverses the last rewind (run it again to redo).",
+        "Shell command side effects (installs, deletes, git, network) are never undone.",
+        "latest or a checkpoint id restores a single checkpoint (upstream form).",
       ],
       name: "rewind",
-      summary: "Inspect or restore workspace checkpoints.",
-      usage: "/rewind [latest|checkpointId]",
+      summary: "Rewind files and/or conversation to a turn; undoable.",
+      usage: "/rewind [list | to <turn> [both|files|conversation] [force] | undo [force] | latest | checkpointId]",
     },
     {
       details: [

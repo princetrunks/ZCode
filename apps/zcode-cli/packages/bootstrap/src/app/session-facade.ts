@@ -62,6 +62,7 @@ type SessionFacade = Pick<
   | "getThoughtLevel"
   | "getTheme"
   | "listCheckpoints"
+  | "listRewindPoints"
   | "listMcpServers"
   | "listModels"
   | "listThoughtLevels"
@@ -384,6 +385,10 @@ export function createSessionFacade(deps: CreateSessionFacadeDeps): SessionFacad
     listCheckpoints: async (options) => {
       await deps.prepareResume();
       return deps.runtime.listWorkspaceCheckpoints(options);
+    },
+    listRewindPoints: async () => {
+      await deps.prepareResume();
+      return deps.runtime.listRewindPoints();
     },
     forkFromCheckpoint: async (options) => {
       await deps.prepareResume(options?.traceContext);

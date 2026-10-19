@@ -68,7 +68,7 @@ Slash Commands:
   /model [id]           Show or switch the current session model
   /new                  Start a fresh session in the TUI
   /resume [sessionId]   Resume a session by sessionId; omit it for latest in cwd
-  /rewind [latest|checkpointId]  Show latest checkpoint or restore workspace files
+  /rewind [list|to <turn> [both|files|conversation] [force]|undo]  Rewind files and/or conversation to a turn (undoable)
   /skill [name] [task]  List skills, or force the next prompt to load one
   /goal [action]        Show or set the current session goal
 `,
