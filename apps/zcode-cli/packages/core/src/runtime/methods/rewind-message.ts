@@ -672,7 +672,8 @@ async function finishUnavailableConversationRewind(
   };
 }
 
-async function rebuildConversationDerivedState(
+// Sando: exported so /rewind undo rebuilds history the same way a rewind does.
+export async function rebuildConversationDerivedState(
   this: AgentRuntimeInternal,
   options: {
     branchCutAfterMessageId: MessageId;

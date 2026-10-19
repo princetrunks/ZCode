@@ -22,9 +22,12 @@ import {
   selectCheckpointsForMessages,
   throwIfTurnAborted,
 } from "../helpers/index.js";
+import { isPathAllowedByConfinement } from "../../tool/path-policy.js";
+import { loadPrunedCheckpointIds } from "./sando-checkpoint-prune.js";
 import type {
   WorkspaceFileRewindApplyResult,
   WorkspaceFileRewindIgnoredFile,
+  WorkspaceFileRewindIgnoredReason,
   WorkspaceFileRewindPreview,
   WorkspaceFileRewindSafeFile,
   WorkspaceFileRewindUnsafeFile,
@@ -71,21 +74,30 @@ interface FileAggregate {
 }
 
 interface IgnoredFileAggregate {
+  message?: string;
   operationCount: number;
   path: string;
+  reason: WorkspaceFileRewindIgnoredReason;
   toolNames: Set<string>;
 }
 
+/**
+ * Sando `force`: overwrite files that changed outside the agent since its last edit (the rewind's undo record keeps
+ * their current content), and skip — instead of refusing the whole rewind — files whose checkpoint is unusable.
+ */
+type FileRewindTargetOptions = {
+  abortSignal?: AbortSignal;
+  force?: boolean;
+  targetCheckpointId?: string;
+  targetMessageId?: MessageId;
+  targetMessageIds?: MessageId[];
+  targetTurnId?: TurnId;
+  traceContext?: TraceContext;
+};
+
 export async function previewWorkspaceFileRewind(
   this: AgentRuntimeInternal,
-  options: {
-    abortSignal?: AbortSignal;
-    targetCheckpointId?: string;
-    targetMessageId?: MessageId;
-    targetMessageIds?: MessageId[];
-    targetTurnId?: TurnId;
-    traceContext?: TraceContext;
-  } = {},
+  options: FileRewindTargetOptions = {},
 ): Promise<WorkspaceFileRewindPreview> {
   const plan = await buildWorkspaceFileRewindPlan.call(this, options);
   return toPreview(plan);
@@ -93,13 +105,7 @@ export async function previewWorkspaceFileRewind(
 
 export async function applyWorkspaceFileRewind(
   this: AgentRuntimeInternal,
-  options: {
-    abortSignal?: AbortSignal;
-    targetCheckpointId?: string;
-    targetMessageId?: MessageId;
-    targetMessageIds?: MessageId[];
-    targetTurnId?: TurnId;
-    traceContext?: TraceContext;
+  options: FileRewindTargetOptions & {
     /** 组合 rewind 的提交闸：文件全部写成功后、workspace event 发布前提交 branch cut。 */
     commitAfterApply?: () => Promise<void>;
   } = {},
@@ -247,6 +253,11 @@ export async function applyWorkspaceFileRewind(
     applied: true,
     preview: toPreview(plan),
     response: `Rewound ${plan.safeFiles.length} file${plan.safeFiles.length === 1 ? "" : "s"} from summary checkpoints.`,
+    priorStates: journal.map((entry) => ({
+      content: entry.state.content,
+      exists: entry.state.exists,
+      path: entry.path,
+    })),
   };
 }
 
@@ -276,14 +287,7 @@ async function compensateFileRewindJournal(
 
 async function buildWorkspaceFileRewindPlan(
   this: AgentRuntimeInternal,
-  options: {
-    abortSignal?: AbortSignal;
-    targetCheckpointId?: string;
-    targetMessageId?: MessageId;
-    targetMessageIds?: MessageId[];
-    targetTurnId?: TurnId;
-    traceContext?: TraceContext;
-  },
+  options: FileRewindTargetOptions,
 ): Promise<WorkspaceFileRewindPlan> {
   const traceContext =
     options.traceContext ?? getCurrentTraceContext() ?? this.rootTraceContext;
@@ -328,6 +332,8 @@ async function buildWorkspaceFileRewindPlan(
     checkpoint: CheckpointCreatedPayload;
   }> = [];
   const unreadableFiles: WorkspaceFileRewindUnsafeFile[] = [];
+  const ignoredByPath = new Map<string, IgnoredFileAggregate>();
+  const prunedCheckpointIds = await loadPrunedCheckpointIds(this);
 
   for (const checkpoint of checkpoints) {
     throwIfTurnAborted(options.abortSignal);
@@ -344,18 +350,47 @@ async function buildWorkspaceFileRewindPlan(
         checkpoint,
       });
     } catch (error) {
+      const pruned = prunedCheckpointIds.has(checkpoint.checkpointId);
+      const message = pruned
+        ? "Checkpoint content was pruned to keep this session within its checkpoint budget (SANDO_CHECKPOINT_SESSION_BUDGET_BYTES)."
+        : error instanceof Error
+          ? error.message
+          : String(error);
+      if (options.force) {
+        // The checkpoint's paths are unknown once its artifact is gone; report the checkpoint itself.
+        addIgnoredFile(
+          ignoredByPath,
+          `checkpoint:${checkpoint.checkpointId}`,
+          "checkpoint",
+          pruned ? "checkpoint_pruned" : "forced_skip",
+          message,
+        );
+        continue;
+      }
       unreadableFiles.push({
         operationCount: Math.max(1, checkpoint.fileCount ?? 1),
         path: `checkpoint:${checkpoint.checkpointId}`,
         reason: "checkpoint_unreadable",
         toolNames: [],
-        message: error instanceof Error ? error.message : String(error),
+        message,
       });
     }
   }
 
-  const ignoredByPath = new Map<string, IgnoredFileAggregate>();
   const operations: FileCheckpointOperation[] = [];
+  // Sando: a path with any omitted (too large / binary) or out-of-confinement checkpoint is left alone entirely;
+  // restoring only its other checkpoints would land on a state the file never had at the target turn.
+  const leaveAlone = new Map<string, { reason: WorkspaceFileRewindIgnoredReason; toolName: string }>();
+  for (const { artifact } of artifacts) {
+    for (const file of artifact.files) {
+      const filePath = resolveCheckpointFilePath(this.workspaceRoot, file.path);
+      if (file.omitted) {
+        leaveAlone.set(filePath, { reason: file.omitted, toolName: artifact.toolName });
+      } else if (!isPathAllowedByConfinement(filePath, this.workspaceRoot)) {
+        leaveAlone.set(filePath, { reason: "outside_workspace", toolName: artifact.toolName });
+      }
+    }
+  }
   const unsupportedByPath = new Map<string, FileAggregate>();
 
   for (const { artifact, checkpoint } of artifacts) {
@@ -365,6 +400,7 @@ async function buildWorkspaceFileRewindPlan(
           ignoredByPath,
           resolveCheckpointFilePath(this.workspaceRoot, file.path),
           artifact.toolName,
+          "bash_ignored",
         );
       }
       continue;
@@ -375,6 +411,11 @@ async function buildWorkspaceFileRewindPlan(
       // FileSystemPort 只接受绝对路径。若不在计划阶段按 runtime workspace root
       // 解析，安全文件会被误报 file_read_failed，组合 rewind 只返回 blocked。
       const filePath = resolveCheckpointFilePath(this.workspaceRoot, file.path);
+      const leave = leaveAlone.get(filePath);
+      if (leave) {
+        addIgnoredFile(ignoredByPath, filePath, artifact.toolName, leave.reason);
+        continue;
+      }
       const afterContent = resolveCheckpointAfterContent(file);
       if (afterContent === undefined) {
         markUnsafe(unsupportedByPath, {
@@ -429,7 +470,7 @@ async function buildWorkspaceFileRewindPlan(
     }
 
     const expectedHash = hashContent(operation.afterContent);
-    if (currentState.hash !== expectedHash) {
+    if (currentState.hash !== expectedHash && !options.force) {
       markUnsafe(unsafeByPath, {
         action: operation.action,
         currentHash: currentState.hash ?? "missing",
@@ -447,6 +488,22 @@ async function buildWorkspaceFileRewindPlan(
       hash: hashContent(operation.beforeContent),
     });
     applyOperations.push(operation);
+  }
+
+  if (options.force) {
+    for (const [path, unsafe] of unsafeByPath) {
+      safeByPath.delete(path);
+      for (const toolName of unsafe.toolNames) {
+        addIgnoredFile(
+          ignoredByPath,
+          path,
+          toolName,
+          "forced_skip",
+          unsafe.unsafe?.message ?? unsafe.unsafe?.reason,
+        );
+      }
+    }
+    unsafeByPath.clear();
   }
 
   for (const [path, unsafe] of unsafeByPath) {
@@ -659,17 +716,22 @@ function addIgnoredFile(
   aggregates: Map<string, IgnoredFileAggregate>,
   path: string,
   toolName: string,
+  reason: WorkspaceFileRewindIgnoredReason,
+  message?: string,
 ): void {
   const existing = aggregates.get(path);
   if (existing) {
     existing.operationCount += 1;
     existing.toolNames.add(toolName);
+    existing.message ??= message;
     return;
   }
   aggregates.set(path, {
     operationCount: 1,
     path,
+    reason,
     toolNames: new Set([toolName]),
+    ...(message ? { message } : {}),
   });
 }
 
@@ -698,8 +760,9 @@ function toIgnoredFile(file: IgnoredFileAggregate): WorkspaceFileRewindIgnoredFi
   return {
     operationCount: file.operationCount,
     path: file.path,
-    reason: "bash_ignored",
+    reason: file.reason,
     toolNames: Array.from(file.toolNames).sort(),
+    ...(file.message ? { message: file.message } : {}),
   };
 }
 

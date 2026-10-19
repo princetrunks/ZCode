@@ -16,6 +16,7 @@ import type {
   TurnResult,
   WorkflowAgentRunner,
   WorkspaceCheckpointSummary,
+  SandoRewindPoint,
   WorkspaceForkResult,
   WorkspaceGenerateTextInput,
   WorkspaceHookReviewTarget,
@@ -515,6 +516,8 @@ export interface ZCodeApp {
   }): Promise<DynamicWorkflowRunWorkspaceNodeResult | undefined>;
   disconnectMcpServer(name: string): Promise<McpServerStatus | undefined>;
   listCheckpoints(options?: { limit?: number }): Promise<WorkspaceCheckpointSummary[]>;
+  /** Sando: rewind points by turn (real user prompts of the active branch) for the /rewind picker. */
+  listRewindPoints(): Promise<SandoRewindPoint[]>;
   forkFromCheckpoint(options?: {
     targetCheckpointId?: string;
     targetMessageId?: string;

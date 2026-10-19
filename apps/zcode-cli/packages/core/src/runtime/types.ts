@@ -599,11 +599,31 @@ export interface WorkspaceFileRewindUnsafeFile {
   toolNames: string[];
 }
 
+/**
+ * Files a rewind leaves alone. Sando adds: `too_large` / `binary` (checkpoint stored no content), `outside_workspace`
+ * (--confine-to-cwd), `checkpoint_pruned` (session checkpoint budget), `forced_skip` (an unsafe file skipped by `force`).
+ */
+export type WorkspaceFileRewindIgnoredReason =
+  | "bash_ignored"
+  | "too_large"
+  | "binary"
+  | "outside_workspace"
+  | "checkpoint_pruned"
+  | "forced_skip";
+
 export interface WorkspaceFileRewindIgnoredFile {
+  message?: string;
   operationCount: number;
   path: string;
-  reason: "bash_ignored";
+  reason: WorkspaceFileRewindIgnoredReason;
   toolNames: string[];
+}
+
+/** Sando: what a file looked like right before a rewind touched it (the undo record of that rewind). */
+export interface WorkspaceFileRewindPriorState {
+  content: string | null;
+  exists: boolean;
+  path: string;
 }
 
 export interface WorkspaceFileRewindPreview {
@@ -617,6 +637,57 @@ export interface WorkspaceFileRewindApplyResult {
   applied: boolean;
   preview: WorkspaceFileRewindPreview;
   response: string;
+  /** Sando: state of every written file before this apply (journal order), for /rewind undo. */
+  priorStates?: WorkspaceFileRewindPriorState[];
+}
+
+// ============================================================
+// Sando: /rewind list | to | undo
+// ============================================================
+
+/** One real user prompt in the active conversation branch, i.e. a point you can rewind to (state before it). */
+export interface SandoRewindPoint {
+  /** 1-based position among real user prompts of the active branch. */
+  turn: number;
+  messageId: MessageId;
+  preview: string;
+  createdAt: number;
+  /** Checkpointed file edits made in this turn. */
+  editCount: number;
+  /** Paths the turn's Write/Edit-style tool calls named (best effort, from tool inputs). */
+  editedFiles: string[];
+  /** Shell (Bash) commands the turn ran; their side effects are never undone. */
+  shellCommandCount: number;
+  /** Totals from this turn to the end of the branch: what rewinding to this point would cover. */
+  editCountFromHere: number;
+  shellCommandCountFromHere: number;
+}
+
+export interface SandoRewindRestoredFile {
+  action: "restore" | "delete";
+  path: string;
+}
+
+export interface SandoRewindResult {
+  applied: boolean;
+  response: string;
+  scope?: RewindScope;
+  turn?: number;
+  targetMessageId?: MessageId;
+  restoredFiles: SandoRewindRestoredFile[];
+  skippedFiles: WorkspaceFileRewindIgnoredFile[];
+  blockedFiles: WorkspaceFileRewindUnsafeFile[];
+  conversationRewound: boolean;
+  shellCommandCount: number;
+  /** An undo record was saved: `/rewind undo` puts things back. */
+  undoAvailable: boolean;
+}
+
+export interface SandoRewindUndoInfo {
+  undoId: string;
+  label: string;
+  createdAt: number;
+  kind: "rewind" | "undo";
 }
 
 export interface ConversationRewindResult {
@@ -888,6 +959,22 @@ export type ParsedRewindCommand =
     }
   | {
       action: "status";
+    }
+  | {
+      /** Sando: list rewind points by turn. */
+      action: "list";
+    }
+  | {
+      /** Sando: rewind files and/or conversation to just before a turn (number or user message id). */
+      action: "to";
+      force: boolean;
+      scope: RewindScope;
+      target: string;
+    }
+  | {
+      /** Sando: reverse the last rewind (running it again redoes). */
+      action: "undo";
+      force: boolean;
     };
 
 export type ContextUsageTokenMethod = "estimated" | "provider_count" | "proportional_estimate";

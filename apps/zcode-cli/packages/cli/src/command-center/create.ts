@@ -17,7 +17,12 @@ import { handleSkillListCommand } from "./handlers/skill.js";
 import { handleTargetCommand } from "./handlers/goal.js";
 import { recordSlashCommandInHistory } from "./history.js";
 import { attachCurrentSessionMetadata, normalizeTuiPromptInput } from "./metadata.js";
-import { buildCheckpointSelection, buildSessionSelection } from "./selections.js";
+import {
+  buildCheckpointSelection,
+  buildRewindPointSelection,
+  buildRewindScopeSelection,
+  buildSessionSelection,
+} from "./selections.js";
 import {
   AVAILABLE_COMMANDS,
   buildManualSkillPrompt,
@@ -228,6 +233,27 @@ export function createCommandCenter(deps: CommandCenterDeps): TuiSubmitPrompt {
 
       if (command.name === "rewind") {
         const app = await deps.getApp();
+        // Sando: turn picker → scope picker → `/rewind to <turn> <scope>` (runs in the runtime like any /rewind).
+        if (command.args.length === 0 && app.listRewindPoints) {
+          return {
+            mode: deps.getMode?.(),
+            response: "Select a turn to rewind to.",
+            selection: buildRewindPointSelection(await app.listRewindPoints()),
+          };
+        }
+        const pick = /^pick\s+#?(\d+)$/.exec(command.args.trim());
+        if (pick && app.listRewindPoints) {
+          const point = (await app.listRewindPoints()).find(
+            (candidate) => candidate.turn === Number(pick[1]),
+          );
+          if (point) {
+            return {
+              mode: deps.getMode?.(),
+              response: `Rewind to before turn ${point.turn}: choose what to restore.`,
+              selection: buildRewindScopeSelection(point),
+            };
+          }
+        }
         if (command.args.length === 0 && app.listCheckpoints) {
           return {
             mode: deps.getMode?.(),

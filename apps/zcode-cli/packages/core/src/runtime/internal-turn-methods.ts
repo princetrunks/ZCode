@@ -62,6 +62,9 @@ import type {
   WorkspaceCheckpointSummary,
   WorkspaceFileRewindApplyResult,
   WorkspaceFileRewindPreview,
+  SandoRewindPoint,
+  SandoRewindResult,
+  SandoRewindUndoInfo,
   WorkspaceForkResult,
   WorkspaceRewindRestoredFile,
   WorkspaceRewindResult,
@@ -278,8 +281,30 @@ export interface AgentRuntimeTurnMethods {
   forkConversationBeforeMessage(
     options: ConversationBeforeInputForkOptions,
   ): Promise<WorkspaceForkResult>;
+  /** Sando: real user prompts of the active branch, with edit / shell counts (what /rewind list shows). */
+  listRewindPoints(): Promise<SandoRewindPoint[]>;
+  /** Sando: restore files and/or conversation to just before a turn; saves an undo record. */
+  rewindToTurn(options: {
+    target: string;
+    scope: RewindScope;
+    force?: boolean;
+    events: SessionEvent[];
+    traceContext: TraceContext;
+    abortSignal?: AbortSignal;
+  }): Promise<SandoRewindResult>;
+  /** Sando: reverse the latest rewind (or undo) using its undo record; saves a redo record. */
+  undoLastRewind(options: {
+    force?: boolean;
+    events: SessionEvent[];
+    traceContext: TraceContext;
+    abortSignal?: AbortSignal;
+  }): Promise<SandoRewindResult>;
+  /** Sando: the record `/rewind undo` would apply next, if any. */
+  getRewindUndoInfo(): Promise<SandoRewindUndoInfo | null>;
   previewWorkspaceFileRewind(options?: {
     abortSignal?: AbortSignal;
+    /** Sando: overwrite externally modified files and skip unusable checkpoints (see file-rewind.ts). */
+    force?: boolean;
     targetCheckpointId?: string;
     targetMessageId?: MessageId;
     targetMessageIds?: MessageId[];
@@ -288,6 +313,8 @@ export interface AgentRuntimeTurnMethods {
   }): Promise<WorkspaceFileRewindPreview>;
   applyWorkspaceFileRewind(options?: {
     abortSignal?: AbortSignal;
+    /** Sando: overwrite externally modified files and skip unusable checkpoints (see file-rewind.ts). */
+    force?: boolean;
     targetCheckpointId?: string;
     targetMessageId?: MessageId;
     targetMessageIds?: MessageId[];

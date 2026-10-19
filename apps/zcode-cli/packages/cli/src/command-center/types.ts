@@ -105,6 +105,19 @@ export type CommandCenterCheckpoint = {
   scope: string;
 };
 
+/** Sando: one turn you can rewind to (mirrors core SandoRewindPoint). */
+export type CommandCenterRewindPoint = {
+  createdAt: Date | number | string;
+  editCount: number;
+  editCountFromHere: number;
+  editedFiles: string[];
+  messageId: string;
+  preview: string;
+  shellCommandCount: number;
+  shellCommandCountFromHere: number;
+  turn: number;
+};
+
 export type CommandCenterSession = {
   directory: string;
   id: string;
@@ -215,6 +228,7 @@ export type CommandCenterApp = {
   uninstallPlugin?(plugin: string): Promise<CommandCenterPluginUninstallResult>;
   listMcpServers?(): Promise<Record<string, CommandCenterMcpStatus>>;
   listCheckpoints?(options?: { limit?: number }): Promise<CommandCenterCheckpoint[]>;
+  listRewindPoints?(): Promise<CommandCenterRewindPoint[]>;
   connectMcpServer?(name: string): Promise<CommandCenterMcpStatus>;
   disconnectMcpServer?(name: string): Promise<CommandCenterMcpStatus | undefined>;
   expertWorkflowStatus?(options?: {

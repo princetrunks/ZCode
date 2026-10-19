@@ -18,19 +18,30 @@ genuinely useful features that local models need. Maybe a product later (Harness
   refuse paths outside the workspace, symlinks resolved). Limits: confinement covers the file tools and the Bash working
   directory, not what a running Bash command or the node REPL touches; `--harness` hooks.json (the proposal's c8) is not done.
 
-- **Native subagents** (branch `fleet/sando-subagents-20261019`, 2026-10-19, not yet merged; spec `SANDO-SUBAGENTS.md`):
+- **Native subagents** (merged into `sando` 2026-10-19; spec `SANDO-SUBAGENTS.md`):
   built on upstream's `Agent` tool and `.zcode/agents/*.md` profiles. New: per-call `model` (any configured provider,
   validated before a child starts) and `max_turns`; the step cap is actually enforced (min of call, profile and
   `--max-turns`, default 30); at most 2 children run at once (`ZCODE_SUBAGENT_MAX_PARALLEL`), the rest wait; the parent
   gets only the child's final message cut to 6000 bytes (`ZCODE_SUBAGENT_RESULT_BYTES`, full text in `result.md`) plus
   model / files changed / cap; `--confine-to-cwd` reaches children. The workbench shows each child as a collapsible card.
   Small-context lesson: a `general-purpose` child costs ~28k tokens before it starts; an allowlisted agent ~2k.
+- **Checkpoints + `/rewind`** (merged into `sando` 2026-10-19). Every
+  successful Edit/Write already stored the file's pre-edit text (upstream). Sando adds the turn model on top:
+  `/rewind list`, `/rewind to <turn> [both|files|conversation] [force]` and `/rewind undo` (run it again to redo). The TUI
+  shows a turn picker and then a scope picker. The web workbench opens a Rewind dialog when you type `/rewind`.
+  - Every rewind saves an undo record: what each file looked like before it, plus the active conversation.
+  - Files changed outside the agent block a rewind unless `force` is used.
+  - Shell side effects are never undone, and every surface says so.
+  - Per-file cap of 2 MiB (`SANDO_CHECKPOINT_MAX_FILE_BYTES`); binaries are skipped.
+  - Per-session budget of 256 MiB (`SANDO_CHECKPOINT_SESSION_BUDGET_BYTES`) that prunes the oldest checkpoints first.
+  - `--confine-to-cwd` is respected on restore.
+  - Limits: edits made by Bash or the node REPL are not checkpointed, so they cannot be rewound.
 
 ## Table stakes (what the best harnesses have): status
 | Feature | Claude Code / Codex / OpenCode | Sando today | Next step |
 |---|---|---|---|
-| Subagents / parallel workers | yes | **native, on branch `fleet/sando-subagents-20261019`** (2026-10-19): `Agent`/`Task` with per-call `model` + `max_turns`, enforced step cap, 2 in parallel, byte-budgeted result + files touched, collapsible card | merge; ship a lean `worker` agent; per-GPU (not per-session) parallel cap |
-| Plan mode, checkpoints / rewind | yes | partial | checkpoint per tool batch, `/rewind` |
+| Subagents / parallel workers | yes | **native** (merged 2026-10-19): `Agent`/`Task` with per-call `model` + `max_turns`, enforced step cap, 2 in parallel, byte-budgeted result + files touched, collapsible card | ship a lean `worker` agent; per-GPU (not per-session) parallel cap |
+| Plan mode, checkpoints / rewind | yes | rewind done (merged 2026-10-19; turn list, files / chat / both, undo) | checkpoint Bash-made file changes (shadow-git snapshot), plan mode |
 | Hooks, skills, plugins, MCP | yes | yes (plugin) | ship a hooks recipe library |
 | Context compaction | yes | upstream | tune for 16k–64k local windows (CRACK voice, Torii 32k) |
 | Background tasks that outlive the session | partial | no | tmux/systemd-backed jobs with ntfy on finish |

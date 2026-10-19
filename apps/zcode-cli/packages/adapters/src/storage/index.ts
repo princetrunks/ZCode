@@ -176,6 +176,30 @@ export class NodeToolArtifactStore implements ToolArtifactStorePort {
     return { path, contentType: contentTypeForFileName(fileName), bytes: await readFile(path) };
   }
 
+  async deleteToolResultArtifact(
+    request: ToolArtifactReadRequest,
+    options?: { signal?: AbortSignal },
+  ): Promise<void> {
+    if (options?.signal?.aborted) {
+      throw options.signal.reason instanceof Error
+        ? options.signal.reason
+        : new Error("Tool artifact delete cancelled");
+    }
+    const { artifactId, sessionId } = parseArtifactUri(request.uri);
+    const sessionDir = join(this.rootDir, sanitizePathSegment(sessionId));
+    let entries: string[];
+    try {
+      entries = await readdir(sessionDir);
+    } catch {
+      return;
+    }
+    const fileName = entries.find((entry) => entry.includes(artifactId));
+    if (!fileName) return;
+    await unlink(join(sessionDir, fileName)).catch((error: NodeJS.ErrnoException) => {
+      if (error.code !== "ENOENT") throw error;
+    });
+  }
+
   async statToolResultArtifact(
     request: ToolArtifactStatRequest,
     options?: { signal?: AbortSignal },

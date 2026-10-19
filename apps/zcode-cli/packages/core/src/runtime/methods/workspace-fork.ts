@@ -44,6 +44,8 @@ export async function restoreWorkspaceCheckpointFiles(
   const restoredFiles: WorkspaceRewindRestoredFile[] = [];
   for (const file of files) {
     throwIfTurnAborted(abortSignal);
+    // Sando: an omitted (too large / binary) checkpoint has no stored content; restoring would delete the file.
+    if (file.omitted) continue;
     if (!file.existedBefore || file.beforeContent === null) {
       await runtime.fileSystemPort.removeFile(
         {

@@ -14,6 +14,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
+import { REWIND_IGNORED_REASON_KEYS } from "@/lib/sandoRewind.js";
 
 type FileRewindPreviewFile =
   | V4ConversationFileRewindPreviewResult["safeFiles"][number]
@@ -33,16 +34,9 @@ interface ConversationFileRewindDialogProps {
 }
 
 function formatReason(reason: string, intl: ReturnType<typeof useZCodeIntl>["intl"]) {
+  // Sando: one table for every rewind reason (shared with SandoRewindDialog).
   const fallbackReasonKey = "chat.changeSummary.rewindDialog.reason.unsupportedCheckpoint";
-  const keyByReason: Record<string, string> = {
-    bash_ignored: "chat.changeSummary.rewindDialog.reason.bashIgnored",
-    checkpoint_missing: "chat.changeSummary.rewindDialog.reason.checkpointMissing",
-    checkpoint_unreadable: "chat.changeSummary.rewindDialog.reason.checkpointUnreadable",
-    external_modified: "chat.changeSummary.rewindDialog.reason.externalModified",
-    file_read_failed: "chat.changeSummary.rewindDialog.reason.fileReadFailed",
-    unsupported_checkpoint: fallbackReasonKey,
-  };
-  return intl.formatMessage({ id: keyByReason[reason] ?? fallbackReasonKey });
+  return intl.formatMessage({ id: REWIND_IGNORED_REASON_KEYS[reason] ?? fallbackReasonKey });
 }
 
 function PreviewFileList({

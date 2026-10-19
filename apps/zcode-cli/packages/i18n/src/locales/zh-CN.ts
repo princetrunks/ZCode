@@ -68,7 +68,7 @@ Slash Commands:
   /model [id]           查看或切换当前 session 模型
   /new                  在 TUI 中开始新 session
   /resume [sessionId]   按 sessionId 恢复 session；省略时恢复当前 cwd 最新 session
-  /rewind [latest|checkpointId]  查看最新 checkpoint 或恢复 workspace 文件
+  /rewind [list|to <turn> [both|files|conversation] [force]|undo]  将文件和/或对话回退到某一轮（可撤销）
   /skill [name] [task]  列出 skills，或强制下一次 prompt 加载某个 skill
   /goal [action]        查看或设置当前 session goal
 `,

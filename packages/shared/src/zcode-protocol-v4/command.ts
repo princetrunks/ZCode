@@ -14,6 +14,13 @@ import {
   amendWorkflowRunSettingsResultSchema,
 } from "./workflow-run-settings-command.js";
 import {
+  listRewindPointsPayloadSchema,
+  listRewindPointsResultSchema,
+  rewindToTurnPayloadSchema,
+  sandoRewindResultSchema,
+  undoRewindPayloadSchema,
+} from "./sando-rewind-command.js";
+import {
   workspaceHookReviewCommandTargetSchema,
   workspaceHookReviewDecisionSchema,
   workspaceHookTrustRevokeTargetSchema,
@@ -241,6 +248,10 @@ export const commandPayloadSchemas = {
   renameSession: z.object({ title: z.string() }),
   deleteSession: z.object({}),
   discardSharedContext: z.object({ contextId: z.string().trim().min(1) }).strict(),
+  // Sando: turn-keyed rewind (see sando-rewind-command.ts). Not CAS: they target a message id, not a row revision.
+  listRewindPoints: listRewindPointsPayloadSchema,
+  rewindToTurn: rewindToTurnPayloadSchema,
+  undoRewind: undoRewindPayloadSchema,
 } as const;
 
 export type CommandType = keyof typeof commandPayloadSchemas;
@@ -406,6 +417,8 @@ export const commandResultSchema = z.discriminatedUnion("type", [
     toolCallId: z.string().min(1),
   }),
   amendWorkflowRunSettingsResultSchema,
+  listRewindPointsResultSchema,
+  sandoRewindResultSchema,
   z.object({
     // messageId 只在 TurnStarted 后作为旁路归因补齐；Core admission ACK 不等待
     // projection commit，不能把 messageId 作为输入 accepted 的必要条件。

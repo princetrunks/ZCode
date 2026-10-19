@@ -2904,6 +2904,17 @@ export class ConversationV4Gateway {
   }
 
   /**
+   * Sando: rebuild one session's projection from its persisted transcript and resync its subscribers (the forced
+   * branch of hydration). Used after /rewind undo, whose re-activated turns the live reducer cannot re-add.
+   */
+  async rebuildConversationProjection(sessionId: string): Promise<void> {
+    if (!this.publishers.has(sessionId)) return;
+    await this.hydrationInFlight.get(sessionId)?.catch(() => undefined);
+    this.hydratedSessions.delete(sessionId);
+    await this.hydratePublisher(sessionId, undefined, true);
+  }
+
+  /**
    * 首次订阅时的投影重建（hydration）。语义见 subscribe 注释；
    * synthesized 事件按 sequenceNumber 去重（publisher 已 ingest 过的 live 事件不重放）。
    */

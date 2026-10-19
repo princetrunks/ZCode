@@ -129,6 +129,14 @@ export interface ToolArtifactStorePort {
     request: ToolArtifactStatRequest,
     options?: { signal?: AbortSignal },
   ): Promise<ToolArtifactStatResult>;
+  /**
+   * Sando: delete one artifact (checkpoint pruning under the per-session budget). Optional; a store without it simply
+   * never prunes. Deleting an artifact that is already gone is not an error.
+   */
+  deleteToolResultArtifact?(
+    request: ToolArtifactReadRequest,
+    options?: { signal?: AbortSignal },
+  ): Promise<void>;
   primeImageAttachmentPath?(
     request: ImageAttachmentPathPrimeRequest,
   ): Promise<MediaAttachmentPathResult>;

@@ -151,6 +151,12 @@ import {
 } from "./session-fork.js";
 import { loadCheckpointMessagePreviews } from "./workspace-checkpoints.js";
 import { applyWorkspaceFileRewind, previewWorkspaceFileRewind } from "./file-rewind.js";
+import {
+  getRewindUndoInfo,
+  listRewindPoints,
+  rewindToTurn,
+  undoLastRewind,
+} from "./sando-rewind.js";
 import { scheduleTools } from "./tools.js";
 import { executeTools } from "./tools.js";
 import { emitToolScheduledEvents } from "./tools.js";
@@ -352,6 +358,10 @@ export function installAgentRuntimeMethods(ctor: AgentRuntimeConstructor): void 
   proto.loadCheckpointMessagePreviews = loadCheckpointMessagePreviews;
   proto.previewWorkspaceFileRewind = previewWorkspaceFileRewind;
   proto.applyWorkspaceFileRewind = applyWorkspaceFileRewind;
+  proto.listRewindPoints = listRewindPoints;
+  proto.rewindToTurn = rewindToTurn;
+  proto.undoLastRewind = undoLastRewind;
+  proto.getRewindUndoInfo = getRewindUndoInfo;
   proto.scheduleTools = scheduleTools;
   proto.executeTools = executeTools;
   proto.emitToolScheduledEvents = emitToolScheduledEvents;

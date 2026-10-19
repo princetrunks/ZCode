@@ -113,11 +113,33 @@ export async function loadPersistedConversationMaterialization(input: {
       : undefined;
   return {
     goalVerificationEntries: goalVerificationEntriesFromSessionEntries(entries),
-    memoryEvents: [...input.memoryEvents],
+    memoryEvents: withoutSupersededConversationCuts(
+      input.memoryEvents,
+      session?.revert?.branchGeneration,
+    ),
     messages,
     ...(sharedContextImport ? { sharedContextImport } : {}),
     target,
   };
+}
+
+/**
+ * Sando: a committed conversation cut (RewindTriggered with a branchGeneration) from an older branch generation is
+ * already reflected in `messages`, which come from the persisted branch selection. Replaying it can only hurt: after
+ * `/rewind undo` re-activates the cut turns, the old event would find their rows again and remove them a second time.
+ * Workspace-only events (file "reverted" badges) and the current generation's cut are kept.
+ */
+function withoutSupersededConversationCuts(
+  events: readonly SessionEvent[],
+  currentBranchGeneration: number | undefined,
+): SessionEvent[] {
+  if (currentBranchGeneration === undefined) return [...events];
+  return events.filter((event) => {
+    if (event.type !== SessionEventType.RewindTriggered) return true;
+    const payload = event.payload as { scope?: string; branchGeneration?: number };
+    if (payload.scope !== "conversation" && payload.scope !== "both") return true;
+    return payload.branchGeneration === undefined || payload.branchGeneration >= currentBranchGeneration;
+  });
 }
 
 interface ColdEventMergeDiagnostic {

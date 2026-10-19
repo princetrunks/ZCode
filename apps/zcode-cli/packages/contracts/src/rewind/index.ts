@@ -55,6 +55,8 @@ export const checkpointCreatedPayloadSchema = z
     fileCount: z.number().int().nonnegative().optional(),
     compactBoundaryId: z.string().min(1).optional(),
     coveredByCompact: z.boolean().optional(),
+    /** Sando: bytes of the checkpoint artifact, so the per-session checkpoint budget can prune oldest-first. */
+    artifactBytes: z.number().int().nonnegative().optional(),
   })
   .strict();
 
@@ -114,6 +116,11 @@ export const workspaceCheckpointArtifactSchema = z
             afterContent: z.string().optional(),
             afterContentLength: z.number().int().nonnegative().optional(),
             structuredPatch: z.array(diffHunkSchema),
+            /**
+             * Sando: content was not stored (file over the per-file cap, or binary). before/afterContent are null/absent;
+             * rewind reports the file as not restorable instead of deleting or truncating it.
+             */
+            omitted: z.enum(["too_large", "binary"]).optional(),
           })
           .strict(),
       )

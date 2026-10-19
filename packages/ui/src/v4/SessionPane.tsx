@@ -227,6 +227,7 @@ import {
   v4QueuedCommandText,
   type V4VisibleSlashCommand,
 } from "@/v4/slashCommands.js";
+import { SandoRewindDialog, type SandoRewindDispatch } from "@/v4/SandoRewindDialog.js";
 import { useSlashCommands } from "@/hooks/useSlashCommands.js";
 import { useV4Conversation } from "@/v4/V4ConversationContext.js";
 import { useConversationProjection } from "@/v4/useConversationProjection.js";
@@ -1032,6 +1033,8 @@ export function SessionPane({
   const [paneLocalSummaryPanelVariantOverride, setPaneLocalSummaryPanelVariantOverride] =
     useState<ChatViewSummaryPanelVariant | null>(null);
   const [terminalSectionOpen, setTerminalSectionOpen] = useState(false);
+  // Sando: workbench Rewind dialog (`/rewind` in the composer).
+  const [rewindDialogOpen, setRewindDialogOpen] = useState(false);
   const [agentSectionOpen, setAgentSectionOpen] = useState(false);
   const [workflowSectionOpen, setWorkflowSectionOpen] = useState(false);
   const [dropTargetController, setDropTargetController] =
@@ -1701,6 +1704,14 @@ export function SessionPane({
         current.revision,
         current.logEpoch,
       );
+    },
+    [dispatchCommand, sessionId],
+  );
+
+  const handleRewindDispatch = useCallback<SandoRewindDispatch>(
+    (type, payload) => {
+      if (!sessionId) return Promise.reject(new Error("No session to rewind"));
+      return dispatchCommand(type, payload, sessionId);
     },
     [dispatchCommand, sessionId],
   );
@@ -2555,6 +2566,16 @@ export function SessionPane({
         handleDraftSwitchMode("plan");
         if (submission) submission = { ...submission, planEnabled: true };
         if (!slashCommand.task) return "sent" as const;
+      }
+
+      // Sando: `/rewind` never reaches the model; it opens the Rewind dialog for this session.
+      if (slashCommand?.kind === "rewind") {
+        if (!sessionId) {
+          toast(intl.formatMessage({ id: "sando.rewind.noSession" }));
+          return "blocked" as const;
+        }
+        setRewindDialogOpen(true);
+        return "sent" as const;
       }
 
       if (!(await ensureDraftModelReadyForSend())) {
@@ -4871,6 +4892,14 @@ export function SessionPane({
           </SessionPluginReferenceIconBoundary>
         )}
       </div>
+      {sessionId && !readOnly ? (
+        <SandoRewindDialog
+          open={rewindDialogOpen}
+          onOpenChange={setRewindDialogOpen}
+          dispatch={handleRewindDispatch}
+          busy={snapshot?.control.phase === "running" || snapshot?.control.phase === "prewarming"}
+        />
+      ) : null}
     </div>
   );
 }
