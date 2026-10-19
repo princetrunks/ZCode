@@ -18,11 +18,23 @@ genuinely useful features that local models need. Maybe a product later (Harness
   refuse paths outside the workspace, symlinks resolved). Limits: confinement covers the file tools and the Bash working
   directory, not what a running Bash command or the node REPL touches; `--harness` hooks.json (the proposal's c8) is not done.
 
+- **Checkpoints + `/rewind`** (branch `fleet/sando-checkpoints-20261019`, 2026-10-19, not yet merged into `sando`). Every
+  successful Edit/Write already stored the file's pre-edit text (upstream). Sando adds the turn model on top:
+  `/rewind list`, `/rewind to <turn> [both|files|conversation] [force]` and `/rewind undo` (run it again to redo). The TUI
+  shows a turn picker and then a scope picker. The web workbench opens a Rewind dialog when you type `/rewind`.
+  - Every rewind saves an undo record: what each file looked like before it, plus the active conversation.
+  - Files changed outside the agent block a rewind unless `force` is used.
+  - Shell side effects are never undone, and every surface says so.
+  - Per-file cap of 2 MiB (`SANDO_CHECKPOINT_MAX_FILE_BYTES`); binaries are skipped.
+  - Per-session budget of 256 MiB (`SANDO_CHECKPOINT_SESSION_BUDGET_BYTES`) that prunes the oldest checkpoints first.
+  - `--confine-to-cwd` is respected on restore.
+  - Limits: edits made by Bash or the node REPL are not checkpointed, so they cannot be rewound.
+
 ## Table stakes (what the best harnesses have): status
 | Feature | Claude Code / Codex / OpenCode | Sando today | Next step |
 |---|---|---|---|
 | Subagents / parallel workers | yes | via Planner `run_agent` | native subagents with their own model and context |
-| Plan mode, checkpoints / rewind | yes | partial | checkpoint per tool batch, `/rewind` |
+| Plan mode, checkpoints / rewind | yes | rewind done on branch (turn list, files / chat / both, undo) | checkpoint Bash-made file changes (shadow-git snapshot), plan mode |
 | Hooks, skills, plugins, MCP | yes | yes (plugin) | ship a hooks recipe library |
 | Context compaction | yes | upstream | tune for 16k–64k local windows (CRACK voice, Torii 32k) |
 | Background tasks that outlive the session | partial | no | tmux/systemd-backed jobs with ntfy on finish |
