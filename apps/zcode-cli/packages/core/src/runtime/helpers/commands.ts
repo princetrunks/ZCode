@@ -34,6 +34,10 @@ export function parseRewindCommand(input: string): ParsedRewindCommand | null {
   if (args.length === 0 || args === "status" || args === "help" || args === "-h") {
     return { action: "status" };
   }
+  const sandoCommand = parseSandoRewindArgs(args);
+  if (sandoCommand) {
+    return sandoCommand;
+  }
   if (args === "fork") {
     return { action: "fork" };
   }
@@ -100,4 +104,34 @@ function parseForkCommandArgs(args: string): ParsedRewindCommand {
     action: "fork",
     targetCheckpointId: args,
   };
+}
+
+/**
+ * Sando: `/rewind list`, `/rewind to <turn|messageId> [both|files|conversation] [force]`, `/rewind undo [force]`.
+ * Scope defaults to both; words after the target may come in any order.
+ */
+function parseSandoRewindArgs(args: string): ParsedRewindCommand | null {
+  const parts = args.split(/\s+/).filter(Boolean);
+  const verb = parts[0];
+  if (verb === "list" || verb === "ls") {
+    return parts.length === 1 ? { action: "list" } : null;
+  }
+  if (verb === "undo" || verb === "redo") {
+    const rest = parts.slice(1);
+    if (rest.some((word) => word !== "force")) return null;
+    return { action: "undo", force: rest.includes("force") };
+  }
+  if (verb !== "to" || parts.length < 2) return null;
+  let scope: RewindScope = RewindScope.Both;
+  let force = false;
+  for (const word of parts.slice(2)) {
+    if (word === "force") {
+      force = true;
+      continue;
+    }
+    const parsed = word === "files" ? RewindScope.Workspace : rewindScopeFromCommand(word);
+    if (!parsed) return null;
+    scope = parsed;
+  }
+  return { action: "to", force, scope, target: parts[1]! };
 }

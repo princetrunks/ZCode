@@ -1,6 +1,7 @@
 // Scripted OpenAI-compatible chat server for the Sando flag e2e test (CPU only, loopback, ephemeral port).
 // scenario "loop": always call Read(README.md) while tools are offered. "confine": Read(/etc/hostname) once.
 // "inside": Read(README.md) once. "text": answer at once. Each request is recorded in `requests`.
+// A function scenario gets ({ msgs, tools, lastTool }) and returns null (answer) or { name, args } (one tool call).
 import http from "node:http";
 
 export function startFakeOpenAI() {
@@ -28,7 +29,14 @@ export function startFakeOpenAI() {
         lastTool: lastTool ? text(lastTool) : null,
       });
       let call = null;
-      if (tools.includes("Read")) {
+      let callName = "Read";
+      if (typeof state.scenario === "function") {
+        const picked = state.scenario({ msgs, tools, lastTool: lastTool ? text(lastTool) : null });
+        if (picked && tools.includes(picked.name)) {
+          call = picked.args;
+          callName = picked.name;
+        }
+      } else if (tools.includes("Read")) {
         if (state.scenario === "loop") call = { file_path: "README.md" };
         if (state.scenario === "confine" && !lastTool) call = { file_path: "/etc/hostname" };
         if (state.scenario === "inside" && !lastTool) call = { file_path: "README.md" };
@@ -44,7 +52,7 @@ export function startFakeOpenAI() {
                 {
                   id: `t${n}`,
                   type: "function",
-                  function: { name: "Read", arguments: JSON.stringify(call) },
+                  function: { name: callName, arguments: JSON.stringify(call) },
                 },
               ],
             }
@@ -78,7 +86,7 @@ export function startFakeOpenAI() {
                 index: 0,
                 id: `t${n}`,
                 type: "function",
-                function: { name: "Read", arguments: JSON.stringify(call) },
+                function: { name: callName, arguments: JSON.stringify(call) },
               },
             ],
           }),

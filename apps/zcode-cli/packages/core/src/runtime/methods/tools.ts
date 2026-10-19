@@ -32,6 +32,7 @@ import type {
   ExecuteToolsOptions,
   ExecuteToolsResult,
 } from "../types.js";
+import { pruneCheckpointArtifacts } from "./sando-checkpoint-prune.js";
 import type { AgentRuntimeInternal } from "../internal.js";
 import { createMcpToolDisplay } from "../../tool/executor/result-display.js";
 
@@ -210,11 +211,13 @@ export async function emitFileMutationCheckpoint(
         snapshotRef: artifact.uri,
         diffRef: artifact.uri,
         fileCount: 1,
+        artifactBytes: artifact.bytes,
       },
       options.traceContext,
     );
     await this.appendEvent(event, options.traceContext);
     options.events.push(event);
+    await pruneCheckpointArtifacts(this, options.traceContext);
     recordTurnFileChange(this.currentTurnFileChanges, {
       afterContent: candidate.content,
       beforeContent: candidate.originalFile,

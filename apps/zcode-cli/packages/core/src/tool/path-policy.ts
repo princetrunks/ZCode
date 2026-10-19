@@ -93,6 +93,18 @@ export function confinementRoots(
   return roots.map((root) => realpathOfNearestExisting(normalize(root)));
 }
 
+/** True when confinement is off, or `target` (symlinks resolved) is inside the workspace / harness roots. */
+export function isPathAllowedByConfinement(
+  target: string,
+  workspaceRoot: string,
+  env: NodeJS.ProcessEnv = process.env,
+): boolean {
+  if (!isConfinedToWorkspace(env)) return true;
+  const roots = confinementRoots(workspaceRoot, env);
+  const real = realpathOfNearestExisting(normalize(target));
+  return roots.some((root) => isWithin(root, real));
+}
+
 function assertInsideAllowedRoots(resolvedPath: string, options: ToolWorkspacePathOptions): void {
   const roots = confinementRoots(options.workspaceRoot);
   const real = realpathOfNearestExisting(resolvedPath);

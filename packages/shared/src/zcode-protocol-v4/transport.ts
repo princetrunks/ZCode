@@ -715,11 +715,23 @@ const v4WorkspaceFileRewindUnsafeFileSchema = z
   })
   .strict();
 
+// Sando: besides shell-made changes, a rewind leaves alone files whose checkpoint has no content (too large /
+// binary), files outside a --confine-to-cwd workspace, pruned checkpoints, and unsafe files skipped by `force`.
+export const V4_WORKSPACE_FILE_REWIND_IGNORED_REASONS = [
+  "bash_ignored",
+  "too_large",
+  "binary",
+  "outside_workspace",
+  "checkpoint_pruned",
+  "forced_skip",
+] as const;
+
 const v4WorkspaceFileRewindIgnoredFileSchema = z
   .object({
+    message: z.string().optional(),
     operationCount: z.number().int().nonnegative(),
     path: z.string().min(1),
-    reason: z.literal("bash_ignored"),
+    reason: z.enum(V4_WORKSPACE_FILE_REWIND_IGNORED_REASONS),
     toolNames: z.array(z.string()),
   })
   .strict();

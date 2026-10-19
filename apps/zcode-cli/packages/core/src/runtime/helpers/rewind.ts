@@ -19,6 +19,7 @@ import type {
 import type { WorkspaceRewindRestoredFile } from "../types.js";
 import { isPlainRecord, isRuntimeDiffHunk } from "./data.js";
 import { sanitizeSystemReminderBody } from "../../system-reminder/source.js";
+import { checkpointOmittedReason } from "./sando-checkpoint-limits.js";
 
 export const WORKSPACE_CHECKPOINT_CONTENT_TYPE = "application/vnd.zcode.workspace-checkpoint+json";
 
@@ -59,17 +60,28 @@ export function stringifyWorkspaceCheckpointArtifact(
   candidate: FileMutationCheckpointCandidate,
   result: ToolExecutionResult,
 ): string {
+  // Sando: over the per-file cap or binary → keep the record (so rewind can say "not restorable") but not the text.
+  const omitted = checkpointOmittedReason([candidate.originalFile, candidate.content]);
   const artifact: WorkspaceCheckpointArtifact = {
     createdAt: new Date().toISOString(),
     files: [
-      {
-        ...(candidate.content !== undefined ? { afterContent: candidate.content } : {}),
-        afterContentLength: candidate.content?.length,
-        beforeContent: candidate.originalFile,
-        existedBefore: candidate.originalFile !== null,
-        path: candidate.filePath,
-        structuredPatch: candidate.structuredPatch,
-      },
+      omitted
+        ? {
+            afterContentLength: candidate.content?.length,
+            beforeContent: null,
+            existedBefore: candidate.originalFile !== null,
+            omitted,
+            path: candidate.filePath,
+            structuredPatch: [],
+          }
+        : {
+            ...(candidate.content !== undefined ? { afterContent: candidate.content } : {}),
+            afterContentLength: candidate.content?.length,
+            beforeContent: candidate.originalFile,
+            existedBefore: candidate.originalFile !== null,
+            path: candidate.filePath,
+            structuredPatch: candidate.structuredPatch,
+          },
     ],
     kind: "workspace_file_before_change",
     toolCallId: result.toolCallId,

@@ -32,6 +32,7 @@ import {
 import type { TurnResult, WorkspaceRewindResult, ParsedRewindCommand } from "../types.js";
 import type { AgentRuntimeInternal } from "../internal.js";
 import { recordTurnUsageFact } from "./usage-observability.js";
+import { formatRewindPointList } from "./sando-rewind.js";
 
 export async function executeRewindCommand(
   this: AgentRuntimeInternal,
@@ -70,6 +71,28 @@ export async function executeRewindCommand(
       const response =
         command.action === "status"
           ? await this.formatRewindStatus()
+          : command.action === "list"
+            ? formatRewindPointList(await this.listRewindPoints())
+            : command.action === "to"
+              ? (
+                  await this.rewindToTurn({
+                    abortSignal,
+                    events,
+                    force: command.force,
+                    scope: command.scope,
+                    target: command.target,
+                    traceContext: turnTraceContext,
+                  })
+                ).response
+              : command.action === "undo"
+                ? (
+                    await this.undoLastRewind({
+                      abortSignal,
+                      events,
+                      force: command.force,
+                      traceContext: turnTraceContext,
+                    })
+                  ).response
           : command.action === "fork"
             ? (
                 await this.forkWorkspaceFromCheckpoint({
@@ -183,10 +206,12 @@ export async function executeRewindCommand(
 }
 
 export async function formatRewindStatus(this: AgentRuntimeInternal): Promise<string> {
+  // Sando: /rewind (status) shows the turn list; the upstream "latest checkpoint" line follows when there is one.
+  const list = formatRewindPointList(await this.listRewindPoints());
   const projection = await this.rebuildProjection();
   const checkpoint = projection.lastCheckpoint;
   if (!checkpoint) {
-    return "No workspace checkpoint is available yet.";
+    return list;
   }
 
   const fileText =
@@ -196,7 +221,7 @@ export async function formatRewindStatus(this: AgentRuntimeInternal): Promise<st
   const compactText = checkpoint.coveredByCompact
     ? `, covered by compact ${checkpoint.compactBoundaryId ?? "boundary"}`
     : "";
-  return `Latest checkpoint: ${checkpoint.checkpointId} (${fileText}${compactText}). Run /rewind latest to restore workspace files from it.`;
+  return `${list}\n\nLatest checkpoint: ${checkpoint.checkpointId} (${fileText}${compactText}). Run /rewind latest to restore workspace files from it.`;
 }
 
 export async function rewindWorkspaceToCheckpoint(
