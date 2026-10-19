@@ -15,9 +15,22 @@ export interface AgentResultSummary {
   durationMs?: number;
   tokens?: number;
   truncated: boolean;
+  /** Where the full text was saved when the result budget cut it. */
+  resultFile?: string;
 }
 
 const TRUNCATION_MARK = "[subagent result cut to the ";
+// The runner's note: "[subagent result cut to the N-byte budget: full text (M bytes) in <path> — Read it …]"
+const TRUNCATION_NOTE = /\s*\[subagent result cut to the \d+-byte budget:[^\]]*\]\s*$/u;
+const TRUNCATION_FILE = /full text \(\d+ bytes\) in (\S+)/u;
+
+/** Drops the runner's truncation note from the body (the card shows its own line) and keeps the file path. */
+function splitTruncationNote(body: string): { body: string; resultFile?: string } {
+  const note = TRUNCATION_NOTE.exec(body);
+  if (!note) return { body };
+  const file = TRUNCATION_FILE.exec(note[0])?.[1];
+  return { body: body.slice(0, note.index).trimEnd(), ...(file ? { resultFile: file } : {}) };
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -30,10 +43,11 @@ function readInt(value: unknown): number | undefined {
 
 function fromRecord(record: Record<string, unknown>): AgentResultSummary | null {
   if (record.status !== "completed" || !Array.isArray(record.content)) return null;
-  const body = record.content
+  const rawBody = record.content
     .map((block) => (isRecord(block) && typeof block.text === "string" ? block.text : ""))
     .join("\n")
     .trim();
+  const { body, resultFile } = splitTruncationNote(rawBody);
   const files = Array.isArray(record.filesTouched)
     ? record.filesTouched.filter((f): f is string => typeof f === "string")
     : undefined;
@@ -49,7 +63,12 @@ function fromRecord(record: Record<string, unknown>): AgentResultSummary | null 
       ? {}
       : { durationMs: readInt(record.totalDurationMs) }),
     ...(readInt(record.totalTokens) === undefined ? {} : { tokens: readInt(record.totalTokens) }),
-    truncated: record.resultTruncated === true || body.includes(TRUNCATION_MARK),
+    truncated: record.resultTruncated === true || rawBody.includes(TRUNCATION_MARK),
+    ...(typeof record.resultFile === "string"
+      ? { resultFile: record.resultFile }
+      : resultFile
+        ? { resultFile }
+        : {}),
   };
 }
 
@@ -85,7 +104,8 @@ export function parseAgentResultSummary(output: unknown): AgentResultSummary | n
   const agentIdAt = text.search(/^agentId: /mu);
   const usage = /<usage>([\s\S]*?)<\/usage>/u.exec(text);
   if (agentIdAt < 0 && !usage) return null;
-  const body = (agentIdAt >= 0 ? text.slice(0, agentIdAt) : text.slice(0, usage!.index)).trim();
+  const rawBody = (agentIdAt >= 0 ? text.slice(0, agentIdAt) : text.slice(0, usage!.index)).trim();
+  const { body, resultFile } = splitTruncationNote(rawBody);
   const fields = new Map<string, string>();
   for (const line of (usage?.[1] ?? "").split("\n")) {
     const colon = line.indexOf(":");
@@ -105,7 +125,8 @@ export function parseAgentResultSummary(output: unknown): AgentResultSummary | n
     ...(toolUses === undefined ? {} : { toolUses }),
     ...(durationMs === undefined ? {} : { durationMs }),
     ...(tokens === undefined ? {} : { tokens }),
-    truncated: body.includes(TRUNCATION_MARK),
+    truncated: rawBody.includes(TRUNCATION_MARK),
+    ...(resultFile ? { resultFile } : {}),
   };
 }
 

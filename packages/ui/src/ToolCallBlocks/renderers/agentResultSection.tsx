@@ -148,6 +148,11 @@ export function AgentResultSection({
             "chat.toolCall.agent.result.truncated",
             "Shortened to the result budget; the full text is in the agent's result.md.",
           )}
+          {summary.resultFile ? (
+            <span className="mt-1 block break-all font-mono text-foreground-subtle">
+              {summary.resultFile}
+            </span>
+          ) : null}
         </div>
       ) : null}
     </section>

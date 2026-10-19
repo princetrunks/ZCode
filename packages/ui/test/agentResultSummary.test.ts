@@ -32,10 +32,12 @@ test("reads the parent-facing footer", () => {
 
 test("files_touched: none is an empty list; truncation note is detected", () => {
   const s = parseAgentResultSummary(
-    "HEAD\n\n[subagent result cut to the 1000-byte budget: full text in /x/result.md]\nagentId: a\n<usage>files_touched: none\ntool_uses: 0\nduration_ms: 5</usage>",
+    "HEAD\n\n[subagent result cut to the 1000-byte budget: full text (5000 bytes) in /x/result.md — Read it only if you need more]\nagentId: a\n<usage>files_touched: none\ntool_uses: 0\nduration_ms: 5</usage>",
   );
   assert.deepEqual(s?.filesTouched, []);
   assert.equal(s?.truncated, true);
+  assert.equal(s?.body, "HEAD", "the runner's note is shown once, by the card, not in the body");
+  assert.equal(s?.resultFile, "/x/result.md");
 });
 
 test("structured record and upstream output without Sando fields", () => {
