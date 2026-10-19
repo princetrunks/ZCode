@@ -32,7 +32,9 @@ Nothing the model writes can raise a cap the user configured. It is enforced thr
 ### Parallel children
 At most `ZCODE_SUBAGENT_MAX_PARALLEL` (default **2**) children *execute* at once per parent session, foreground and
 background alike. A call over the cap **waits** (FIFO) for a slot rather than failing, and the wait keeps the inactivity watchdog
-fed. Cancelling the parent turn also cancels a queued call. All children share the parent's workspace.
+fed. Cancelling the parent turn also cancels a queued call. All children share the parent's workspace. Background
+children hold their slot until they finish, so a foreground call can queue behind two long background children; the
+parent turn then waits (the watchdog does not fire). Raise `ZCODE_SUBAGENT_MAX_PARALLEL` if that bites.
 
 **Race risk (documented, not solved):** children can edit the same files at once, and there is no locking. Last write
 wins, and an `Edit` whose `old_string` changed under it fails and the child retries. The guidance in the tool description:
