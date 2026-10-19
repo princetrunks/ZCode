@@ -697,7 +697,7 @@ const v4WorkspaceFileRewindSafeFileSchema = z
   })
   .strict();
 
-const v4WorkspaceFileRewindUnsafeFileSchema = z
+export const v4WorkspaceFileRewindUnsafeFileSchema = z
   .object({
     currentHash: z.string().optional(),
     expectedHash: z.string().optional(),
@@ -726,7 +726,7 @@ export const V4_WORKSPACE_FILE_REWIND_IGNORED_REASONS = [
   "forced_skip",
 ] as const;
 
-const v4WorkspaceFileRewindIgnoredFileSchema = z
+export const v4WorkspaceFileRewindIgnoredFileSchema = z
   .object({
     message: z.string().optional(),
     operationCount: z.number().int().nonnegative(),

@@ -215,6 +215,11 @@ export interface V4CommandCoreHost {
    */
   afterLegacyStateMutation?(record: V4SessionRecordView, reason: string): Promise<void>;
   /**
+   * Sando: re-read the session's persisted transcript (active branch) into its conversation projection and make
+   * subscribers resync. Needed after /rewind undo re-activates turns the live projection had already removed.
+   */
+  rebuildConversationProjection?(sessionId: string): Promise<void>;
+  /**
    * 会话关闭（deleteSession 的执行面：退订事件 → app.close → 注册表摘除 → gateway 清通道）。
    * 过渡形态：会话注册表现归旧协议宿主，binder 内联实现（顺序对齐旧 closeSession op，
    * 见 zcode-protocol/server-operations.ts）；v4 自持会话注册表后收编为原生实现。

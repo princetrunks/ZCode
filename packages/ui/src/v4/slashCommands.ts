@@ -30,6 +30,11 @@ export type V4VisibleSlashCommand =
       kind: "unsupportedGoal";
       action: string;
       displayText: string;
+    }
+  | {
+      /** Sando: `/rewind …` opens the Rewind dialog instead of becoming a prompt. */
+      kind: "rewind";
+      displayText: string;
     };
 
 interface V4VisibleSlashCommandParseOptions {
@@ -78,6 +83,9 @@ export function parseV4VisibleSlashCommand(
 
   if (commandName === "compact" || commandName === "compress") {
     return { kind: "compact", displayText };
+  }
+  if (commandName === "rewind") {
+    return { kind: "rewind", displayText };
   }
   if (commandName !== "goal" && commandName !== "target") {
     return null;
