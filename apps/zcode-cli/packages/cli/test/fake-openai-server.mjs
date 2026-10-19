@@ -4,6 +4,8 @@
 // `state.handler(req)` (subagent e2e) overrides the scenarios: it returns { calls: [{ name, args }], text, delayMs }.
 // `state.inflight` / `state.peakInflight` count requests being answered at once.
 // A function scenario gets ({ msgs, tools, lastTool }) and returns null (answer) or { name, args } (one tool call).
+// Reasoning e2e: a handler decision may carry `reasoning` (streamed as `reasoning_content` before the answer or
+// the tool calls); every request also keeps its raw `messages` array as `rawMessages`.
 import http from "node:http";
 
 export function startFakeOpenAI() {
@@ -35,13 +37,16 @@ export function startFakeOpenAI() {
         system,
         all,
         lastTool: lastTool ? text(lastTool) : null,
+        rawMessages: msgs,
       });
       let calls = [];
       let answer = `final answer from ${j.model}`;
+      let reasoning = null;
       if (state.handler) {
         const decision = state.handler({ ...state.requests[n - 1], msgs }) ?? {};
         calls = decision.calls ?? [];
         if (decision.text !== undefined) answer = decision.text;
+        if (decision.reasoning) reasoning = decision.reasoning;
         state.requests[n - 1].role = decision.role;
         state.inflight += 1;
         state.peakInflight = Math.max(state.peakInflight, state.inflight);
@@ -69,6 +74,7 @@ export function startFakeOpenAI() {
         const message = call
           ? { role: "assistant", content: null, tool_calls: toolCalls }
           : { role: "assistant", content: answer };
+        if (reasoning) message.reasoning_content = reasoning;
         res.writeHead(200, { "content-type": "application/json" });
         res.end(
           JSON.stringify({
@@ -90,6 +96,7 @@ export function startFakeOpenAI() {
         choices: [{ index: 0, delta, finish_reason: finish }],
       });
       send(chunk({ role: "assistant" }));
+      if (reasoning) send(chunk({ reasoning_content: reasoning }));
       if (call) {
         send(chunk({ tool_calls: toolCalls.map((tc, index) => ({ index, ...tc })) }));
         send(chunk({}, "tool_calls"));
