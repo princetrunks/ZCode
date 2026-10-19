@@ -7,18 +7,25 @@ import type { ModelInputMessage } from "@zcode/contracts";
  * request serializers send it all back: `reasoning_content` on the OpenAI-compatible path,
  * `thinking` blocks (signed) on the Anthropic path. That is "keep-all". Reasoning models differ:
  * - MiniMax M2/M3/M3.1 want every turn's thinking back (interleaved thinking), unchanged.
- * - DeepSeek V3.2/V4 want it back inside the current tool-call loop only; older turns are ignored.
+ * - DeepSeek V4/V4.1 keep every turn's thinking when the request declares tools, and drop thinking from
+ *   before the last user message when it does not (the model's own encoder, encoding.py drop_thinking).
  * Effort and output caps live in the provider config rules (config/provider/zcode-builtin.json);
  * this table is the history half and documents the rest. Spec + sources: SANDO-REASONING.md.
  *
  * `passthrough` = exactly what Sando sent before profiles existed. Every model that no profile
  * matches (all current forge models) gets it, so their requests are byte-identical to before.
  */
-export type ReasoningHistoryPolicy = "passthrough" | "keep-all" | "keep-current-turn" | "strip";
+export type ReasoningHistoryPolicy =
+  | "passthrough"
+  | "keep-all"
+  | "keep-all-with-tools"
+  | "keep-current-turn"
+  | "strip";
 
 export const REASONING_HISTORY_POLICIES: readonly ReasoningHistoryPolicy[] = [
   "passthrough",
   "keep-all",
+  "keep-all-with-tools",
   "keep-current-turn",
   "strip",
 ];
@@ -32,6 +39,11 @@ export interface ReasoningProfile {
   readonly recommendedMaxOutputTokens?: number;
   /** Effort values the model accepts on the wire (informational; the config rule maps Sando's levels). */
   readonly effortValues?: readonly string[];
+  /**
+   * OpenAI-compatible hosts that want `reasoning_content` on every assistant message, even an empty one
+   * (thinking-mode tool loops 400 without it). Matched against the base URL host.
+   */
+  readonly requireReasoningFieldHosts?: RegExp;
   readonly source: string;
 }
 
@@ -58,12 +70,14 @@ export const BUILTIN_REASONING_PROFILES: readonly ReasoningProfile[] = Object.fr
     id: "deepseek-tool-loop",
     // deepseek-v4-flash, deepseek-v4-pro, deepseek-v4.1-flash(-1017), deepseek-flash, deepseek-reasoner, deepseek-chat.
     modelMatch: /(?:^|[/:])deepseek-(?:v[34](?:[.-].*)?|flash|reasoner|chat)$/i,
-    history: "keep-current-turn",
+    history: "keep-all-with-tools",
     recommendedMaxOutputTokens: 262144,
     effortValues: ["low", "high", "max"],
+    requireReasoningFieldHosts: /(?:^|\.)deepseek\.com$/i,
     source:
-      "api-docs.deepseek.com thinking mode (reasoning_content is sent back within the tool-call loop and dropped for " +
-      "earlier turns); deepseek-ai/deepseek-harness does the same (see SANDO-REASONING.md for file:line)",
+      "DeepSeek-V4.1-Flash encoding/encoding.py:785-791 (tools declared -> drop_thinking off; else drop before the " +
+      "last user message, :749-767); deepseek-harness llm-deepseek/src/serialize.ts:26-38 replays every turn; " +
+      "pi-ai openai-completions.js:1047-1050,1272 adds an empty reasoning_content for deepseek.com",
   },
 ] satisfies ReasoningProfile[]);
 
@@ -91,9 +105,11 @@ const EMPTY_ASSISTANT_FALLBACK = "(no content)";
 export function applyReasoningHistoryPolicy(
   messages: ModelInputMessage[],
   policy: ReasoningHistoryPolicy,
+  hasTools = false,
 ): ModelInputMessage[] {
   if (policy === "passthrough" || policy === "keep-all") return messages;
-  const keepFrom = policy === "keep-current-turn" ? currentTurnStart(messages) : messages.length;
+  if (policy === "keep-all-with-tools" && hasTools) return messages;
+  const keepFrom = policy === "strip" ? messages.length : currentTurnStart(messages);
 
   let result: ModelInputMessage[] | undefined;
   for (let index = 0; index < keepFrom; index += 1) {
@@ -139,4 +155,32 @@ function isReminderOnly(message: ModelInputMessage): boolean {
         : undefined;
   if (text === undefined || !text.includes("<system-reminder>")) return false;
   return text.replace(REMINDER_BLOCK, "").trim().length === 0;
+}
+
+/** Profile hook for the OpenAI-compatible fetch: true when this model on this host needs the field on every turn. */
+export function requiresReasoningField(modelId: string, baseURL: string | undefined): boolean {
+  const hosts = resolveReasoningProfile(modelId, {}).requireReasoningFieldHosts;
+  if (!hosts || !baseURL) return false;
+  try {
+    return hosts.test(new URL(baseURL).hostname);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Adds `reasoning_content: ""` to assistant messages that lack it (turns from another model, or turns
+ * where the model did not think). Returns the same object when nothing changes.
+ */
+export function addMissingReasoningField<T extends { messages?: unknown }>(body: T): T {
+  if (!Array.isArray(body.messages)) return body;
+  let changed = false;
+  const messages = body.messages.map((message: unknown) => {
+    if (!message || typeof message !== "object") return message;
+    const m = message as Record<string, unknown>;
+    if (m.role !== "assistant" || typeof m.reasoning_content === "string") return message;
+    changed = true;
+    return { ...m, reasoning_content: "" };
+  });
+  return changed ? { ...body, messages } : body;
 }

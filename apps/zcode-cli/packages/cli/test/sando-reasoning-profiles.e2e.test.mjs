@@ -2,7 +2,8 @@
 // two user turns (the second through --resume), the model streaming `reasoning_content` on every step.
 // Checks which `reasoning_content` goes back on the wire per model id:
 //   bonsai2-27b (forge, no profile)   -> passthrough: everything, as before profiles existed
-//   deepseek-v4-flash                 -> keep-current-turn: only the running tool loop's reasoning
+//   deepseek-v4-flash                 -> keep-all-with-tools: everything while tools are declared; a request
+//                                        without tools (--max-turns 1) drops earlier turns' thinking
 //   MiniMax-M3.1-Flash                -> keep-all: every turn's reasoning, unchanged
 // Run: pnpm -r --filter "@zcode/cli..." run build && pnpm test (cli package). No GPU, no network.
 import { test, before, after } from "node:test";
@@ -139,11 +140,25 @@ test("forge model without a profile: passthrough replays every reasoning block (
   assert.deepEqual(replayed(t2.requests[1]), ["TURN1-plan", "TURN1-final", "TURN2-plan"]);
 });
 
-test("deepseek-v4-flash: keep-current-turn drops turn 1's reasoning, keeps the running tool loop's", async () => {
-  const { t1, t2 } = await twoTurns(...MODELS[1]);
-  assert.deepEqual(replayed(t1.requests[1]), ["TURN1-plan"]);
+test("deepseek-v4-flash: tools declared -> every turn's reasoning goes back (DeepSeek encoder)", async () => {
+  const { t2 } = await twoTurns(...MODELS[1]);
+  assert.deepEqual(replayed(t2.requests[1]), ["TURN1-plan", "TURN1-final", "TURN2-plan"]);
+});
+
+test("deepseek-v4-flash: a request without tools drops thinking from before the last user message", async () => {
+  const sel = `${MODELS[1][0]}/${MODELS[1][1]}`;
+  const t1 = await sando({}, "-p", "TURN1 read the readme", "--model", sel, "--json");
+  assert.equal(t1.status, 0, t1.stderr.slice(-2000));
+  const t2 = await sando({}, "--resume", t1.json.sessionId, "-p", "TURN2 answer", "--model", sel, "--max-turns", "1", "--json");
+  assert.equal(t2.status, 0, t2.stderr.slice(-2000));
+  assert.equal(t2.requests.length, 1);
+  assert.equal(t2.requests[0].toolCount, 0);
   assert.deepEqual(replayed(t2.requests[0]), ["", ""]);
-  assert.deepEqual(replayed(t2.requests[1]), ["", "", "TURN2-plan"]);
+  // the forge model under the same conditions keeps everything (passthrough)
+  const f = `${MODELS[0][0]}/${MODELS[0][1]}`;
+  const f1 = await sando({}, "-p", "TURN1 read the readme", "--model", f, "--json");
+  const f2 = await sando({}, "--resume", f1.json.sessionId, "-p", "TURN2 answer", "--model", f, "--max-turns", "1", "--json");
+  assert.deepEqual(replayed(f2.requests[0]), ["TURN1-plan", "TURN1-final"]);
 });
 
 test("MiniMax-M3.1-Flash: keep-all replays every turn's reasoning", async () => {

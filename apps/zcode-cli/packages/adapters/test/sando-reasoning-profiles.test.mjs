@@ -3,7 +3,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
+  addMissingReasoningField,
   applyReasoningHistoryPolicy,
+  requiresReasoningField,
   resolveReasoningProfile,
 } from "../src/model/reasoning-profiles.ts";
 
@@ -29,7 +31,7 @@ test("every current forge model id resolves to passthrough", () => {
   }
 });
 
-test("MiniMax M2..M3.1 keep all thinking; DeepSeek keeps the current tool loop", () => {
+test("MiniMax M2..M3.1 keep all thinking; DeepSeek keeps all when tools are declared", () => {
   for (const id of [
     "MiniMax-M3.1-Flash",
     "MiniMax-M3",
@@ -54,7 +56,7 @@ test("MiniMax M2..M3.1 keep all thinking; DeepSeek keeps the current tool loop",
   ]) {
     const p = resolveReasoningProfile(id, noEnv);
     assert.equal(p.id, "deepseek-tool-loop", id);
-    assert.equal(p.history, "keep-current-turn", id);
+    assert.equal(p.history, "keep-all-with-tools", id);
   }
   assert.equal(resolveReasoningProfile("minimax-text-01", noEnv).history, "passthrough");
 });
@@ -136,4 +138,34 @@ test("no reasoning in history: every policy returns the same array", () => {
     { role: "assistant", content: [T("a")] },
   ];
   for (const p of ["keep-current-turn", "strip"]) assert.equal(applyReasoningHistoryPolicy(h, p), h);
+});
+
+test("keep-all-with-tools: unchanged with tools, current turn only without (DeepSeek encoder drop_thinking)", () => {
+  const h = history();
+  assert.equal(applyReasoningHistoryPolicy(h, "keep-all-with-tools", true), h);
+  assert.deepEqual(reasoningOf(applyReasoningHistoryPolicy(h, "keep-all-with-tools", false)), [
+    "plan B",
+    "plan B2",
+  ]);
+});
+
+test("empty reasoning_content is required only for DeepSeek models on deepseek.com", () => {
+  assert.equal(requiresReasoningField("deepseek-v4-flash", "https://api.deepseek.com/v1"), true);
+  assert.equal(requiresReasoningField("deepseek-v4-flash", "https://openrouter.ai/api/v1"), false);
+  assert.equal(requiresReasoningField("deepseek-v4-flash", "http://127.0.0.1:8100/v1"), false);
+  assert.equal(requiresReasoningField("bonsai2-27b", "https://api.deepseek.com/v1"), false);
+  const body = {
+    model: "deepseek-v4-flash",
+    messages: [
+      { role: "user", content: "q" },
+      { role: "assistant", content: "a", reasoning_content: "r" },
+      { role: "assistant", content: null, tool_calls: [] },
+    ],
+  };
+  const out = addMissingReasoningField(body);
+  assert.deepEqual(
+    out.messages.map((m) => m.reasoning_content),
+    [undefined, "r", ""],
+  );
+  assert.equal(addMissingReasoningField(out), out);
 });

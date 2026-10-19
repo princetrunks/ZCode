@@ -364,7 +364,11 @@ function projectRequestHistory(
   // Sando: per-model reasoning replay (reasoning-profiles.ts). Unmatched models get "passthrough",
   // which returns the same array, so every current forge model sends exactly what it sent before.
   const profile = resolveReasoningProfile(resolved.modelId, env);
-  const withProfile = applyReasoningHistoryPolicy(request.messages, profile.history);
+  const withProfile = applyReasoningHistoryPolicy(
+    request.messages,
+    profile.history,
+    (request.tools?.length ?? 0) > 0,
+  );
   if (resolved.providerKind !== "anthropic") {
     return withProfile === request.messages ? request : { ...request, messages: withProfile };
   }
