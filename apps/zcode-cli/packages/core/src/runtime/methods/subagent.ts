@@ -110,7 +110,10 @@ export function createDefaultSubagentPort(
       const { selection: profileChildSelection, hasConcreteModel } = resolveSubagentSelection({
         // Sando: a per-call `model` (already resolved by the Agent tool) takes the profile's place, so it
         // gets the same registry validation and the same "never fall back to the parent" rule.
-        profileSelection: request.modelSelection ?? request.profile.modelSelection,
+        profileSelection: withCatalogDefaultReasoningLevel(
+          request.modelSelection ?? request.profile.modelSelection,
+          this.modelCatalogPort,
+        ),
         parentSelection: this.getSessionModelSelection(),
         overrideSelection: options?.modelOverride?.selection,
         resolveSelection: deps.resolveEffectiveModelSelection,
@@ -453,6 +456,26 @@ export function createDefaultSubagentPort(
       }
     },
   });
+}
+
+/**
+ * Sando: a profile `model: provider/model` without `thoughtLevel` used to fail with "Reasoning level is required"
+ * for any model that has levels. Fill the registry default instead, the same as the per-call `model` and the
+ * workflow `subagent_model` (resolveModelReference) already do. An explicit level is kept as written.
+ */
+function withCatalogDefaultReasoningLevel(
+  selection: ModelSelection | undefined,
+  catalog: AgentRuntimeInternal["modelCatalogPort"],
+): ModelSelection | undefined {
+  if (!selection || selection.options?.reasoningLevel || !catalog) return selection;
+  const entry = catalog
+    .listModels()
+    .find(
+      (candidate) =>
+        candidate.providerId === selection.providerId && candidate.modelId === selection.modelId,
+    );
+  const level = entry?.defaultReasoningLevel;
+  return level ? { ...selection, options: { ...selection.options, reasoningLevel: level } } : selection;
 }
 
 function minDefinedTurnCap(...values: Array<number | undefined>): number | undefined {
