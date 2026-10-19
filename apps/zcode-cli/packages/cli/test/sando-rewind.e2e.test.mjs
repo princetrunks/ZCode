@@ -245,6 +245,28 @@ test("size cap: an oversized file is checkpointed without content and left alone
   assert.equal(w.read("big.txt"), `${"x".repeat(200)}\n`, "the oversized file is not deleted or truncated");
 });
 
+test("session budget: oldest checkpoints are pruned; rewinding past them is refused, force skips them", async () => {
+  const w = workspace("prune");
+  // One small Write checkpoint artifact is ~0.5 KB; this budget keeps about two.
+  const env = { SANDO_CHECKPOINT_SESSION_BUDGET_BYTES: "1200" };
+  await w.turn(step("MARK-P1", write("p.txt", "p1\n")), { env });
+  await w.turn(step("MARK-P2", write("q.txt", "q1\n")), { env });
+  await w.turn(step("MARK-P3", write("p.txt", "p2\n")), { env });
+  await w.turn(step("MARK-P4", write("q.txt", "q2\n")), { env });
+  const refused = await w.turn("/rewind to 1 files", { env });
+  assert.match(refused.response, /was not applied; nothing was changed/);
+  assert.match(refused.response, /pruned to keep this session within its checkpoint budget/);
+  assert.equal(w.read("p.txt"), "p2\n");
+  // The newest turns stay restorable.
+  const recent = await w.turn("/rewind to 4 files", { env });
+  assert.match(recent.response, /Rewound to before turn 4/);
+  assert.equal(w.read("q.txt"), "q1\n");
+  await w.turn("/rewind undo", { env });
+  assert.equal(w.read("q.txt"), "q2\n");
+  const forced = await w.turn("/rewind to 1 files force", { env });
+  assert.match(forced.response, /checkpoint pruned \(session checkpoint budget\)/);
+});
+
 test("--confine-to-cwd: rewind leaves files outside the workspace alone", async () => {
   const w = workspace("confine");
   const outside = path.join(base, "outside-confine.txt");
