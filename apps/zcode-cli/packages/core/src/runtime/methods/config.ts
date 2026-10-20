@@ -29,6 +29,11 @@ import { applyRuntimeExecutionState } from "../execution-state.js";
 
 import { orderProviderVisibleToolContracts } from "../../tool/provider-visible-order.js";
 import { projectToolModelContract } from "../../tool/model-contract.js";
+import {
+  projectLeanTools,
+  resolveEffectivePromptProfile,
+  type EffectivePromptProfile,
+} from "../../context/prompt-profile.js";
 import { rebuildContextPrefix } from "./context-refresh.js";
 import { filterEmbeddedSearchRuntimeVisibleTools } from "./embedded-search-branch.js";
 import {
@@ -137,13 +142,29 @@ export function getTools(this: AgentRuntimeInternal, model?: Model): ModelToolCo
   if (this.cachedTools === null) {
     this.cachedTools = filterRuntimeVisibleTools.call(this, this.registry.toContracts());
   }
-  return this.cachedTools
+  const tools = this.cachedTools
     .filter((tool) => tool.name !== "WebSearch" || shouldExposeWebSearch.call(this, model))
     .map((tool) =>
       projectToolModelContract(tool, this.registry.get(tool.name), {
         model,
       }),
     );
+  return resolveRuntimePromptProfile(this, model) === "lean" ? projectLeanTools(tools) : tools;
+}
+
+export function resolveRuntimePromptProfile(
+  runtime: Pick<AgentRuntimeInternal, "config">,
+  model: Model | undefined,
+): EffectivePromptProfile {
+  return resolveEffectivePromptProfile({
+    setting: runtime.config.promptProfile,
+    model,
+    taskType: runtime.config.taskType,
+    hasCustomSystemPrompt:
+      Boolean(runtime.config.systemPrompt?.trim()) ||
+      runtime.config.workflowActor !== undefined ||
+      runtime.config.subagentContext !== undefined,
+  });
 }
 
 export function invalidateToolCache(this: AgentRuntimeInternal): void {

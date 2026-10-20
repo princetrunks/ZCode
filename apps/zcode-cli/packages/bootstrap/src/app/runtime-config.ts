@@ -5,7 +5,12 @@ import {
   type ModelSelection,
   type ModelSelectionOptions,
 } from "@zcode/provider";
-import { resolveBashTimeoutPolicy, type AgentProfile, type AgentRuntimeConfig } from "@zcode/core";
+import {
+  parsePromptProfileSetting,
+  resolveBashTimeoutPolicy,
+  type AgentProfile,
+  type AgentRuntimeConfig,
+} from "@zcode/core";
 import { type BuiltInSubagentModelSelectionOverrides } from "@zcode/shared";
 import {
   type CollaborationMode,
@@ -137,6 +142,8 @@ export function resolveAppRuntimeConfig(input: {
     // 只写了几个 allowedTools 的用户突然丢失其余全部工具。
     toolAllowlist: options.runtimeConfig?.toolAllowlist,
     toolDisallowlist: options.runtimeConfig?.toolDisallowlist,
+    // Sando: SANDO_PROMPT_PROFILE=default|lean|lean-local (SANDO-LEAN-PROMPT.md); explicit config wins.
+    ...resolvePromptProfile(options),
     embeddedSearchBackend:
       options.runtimeConfig?.embeddedSearchBackend ??
       resolveDefaultEmbeddedSearchBackend({
@@ -275,6 +282,13 @@ function resolveMaxModelStepsPerTurn(
     throw new Error(`--max-turns expects a positive whole number, got "${raw}"`);
   }
   return { maxModelStepsPerTurn: value };
+}
+
+function resolvePromptProfile(options: ZCodeAppOptions): Pick<AgentRuntimeConfig, "promptProfile"> {
+  const promptProfile =
+    options.runtimeConfig?.promptProfile ??
+    parsePromptProfileSetting((options.env ?? process.env).SANDO_PROMPT_PROFILE);
+  return promptProfile === undefined ? {} : { promptProfile };
 }
 
 function resolveSandoSubagentEnv(

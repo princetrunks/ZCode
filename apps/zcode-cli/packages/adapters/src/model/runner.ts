@@ -36,6 +36,7 @@ import { runGenerateText } from "./runner-generate.js";
 import { runStreamText } from "./runner-stream.js";
 import { normalizeReasoningHistory } from "./reasoning-history-normalization.js";
 import { applyReasoningHistoryPolicy, resolveReasoningProfile } from "./reasoning-profiles.js";
+import { isLocalEndpoint } from "./local-endpoint.js";
 import {
   defaultRuntime,
   type AiSdkModelRuntime,
@@ -266,6 +267,7 @@ export class AiSdkModelAdapter {
         reasoningLevel: optionSpecs.reasoningLevel,
       },
       options: options.options,
+      localEndpoint: isLocalEndpoint(options.providerConfig.api.baseUrl),
       executor: {
         generateText: (request) => {
           const legacyRequest = toLegacyRequest(request);

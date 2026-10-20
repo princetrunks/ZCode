@@ -25,6 +25,7 @@ import { resolveEnabledProjectMemoryRoot } from "../helpers/project-memory.js";
 import { buildContextHistoryEntries } from "./context-history-entries.js";
 import { resolveRuntimeEmbeddedSearchEnabled } from "./embedded-search-branch.js";
 import { getContextSourceShellDisplayName } from "./session-shell-environment.js";
+import { resolveRuntimePromptProfile } from "./config.js";
 
 export { buildContextHistoryEntries };
 
@@ -139,6 +140,7 @@ export function createContextBuilderFromSnapshot(
     outputStyle: this.config.outputStyle,
     compact: this.config.compact,
     guidanceToolNames: this.getTools(options.model).map((tool) => tool.name),
+    promptProfile: resolveRuntimePromptProfile(this, options.model),
   };
 
   return createContextBuilder(contextConfig).setToolRegistry(this.registry);

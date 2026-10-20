@@ -30,6 +30,7 @@ export interface CreateModelOptions {
   properties: ModelPropertiesInput;
   optionSpecs: ModelOptionSpecs;
   options?: ModelOptions;
+  localEndpoint?: boolean;
   executor: ModelExecutor;
 }
 
@@ -44,6 +45,7 @@ class ExecutableModel implements Model {
   readonly properties: ModelProperties;
   readonly optionSpecs: ModelOptionSpecs;
   readonly options: ModelOptions;
+  readonly localEndpoint?: boolean;
   private readonly executor: ModelExecutor;
 
   constructor(input: CreateModelOptions) {
@@ -53,6 +55,7 @@ class ExecutableModel implements Model {
     this.properties = Object.freeze({ ...input.properties });
     this.optionSpecs = freezeOptionSpecs(input.optionSpecs);
     this.options = Object.freeze(validatePartialOptions(this.optionSpecs, input.options ?? {}));
+    if (input.localEndpoint !== undefined) this.localEndpoint = input.localEndpoint;
     this.executor = input.executor;
   }
 
@@ -65,6 +68,7 @@ class ExecutableModel implements Model {
       properties: this.properties,
       optionSpecs: this.optionSpecs,
       options: { ...this.options, ...options },
+      ...(this.localEndpoint === undefined ? {} : { localEndpoint: this.localEndpoint }),
       executor: this.executor,
     });
   }

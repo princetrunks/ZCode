@@ -31,6 +31,7 @@ export type {
 export type ContextSource =
   | "cli_prefix" // CLI / 产品身份前缀
   | "identity" // Agent 基础描述
+  | "lean_system_prompt" // Sando lean profile: identity + rules in one block
   | "env_info" // 环境信息 (cwd, platform, git repo boolean)
   | "system_context" // git snapshot context
   | "skills" // 可用 skills
@@ -125,6 +126,8 @@ export interface ContextBuilderConfig {
   outputStyle?: OutputStylePromptConfig;
   compact?: AutoCompactPolicyConfig;
   guidanceToolNames?: readonly string[];
+  /** Sando: already resolved for this model (see prompt-profile.ts). Absent = default. */
+  promptProfile?: "default" | "lean";
 }
 
 /**

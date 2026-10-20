@@ -1,3 +1,4 @@
+import type { PromptProfileSetting } from "../context/prompt-profile.js";
 import type { RuntimeInputPresentation } from "@zcode/contracts";
 /* eslint-disable max-lines -- Runtime 类型集中承载 core/runtime 对外结构，拆分需要单独迁移。 */
 import { PermissionService, ToolScheduler } from "./deps.js";
@@ -160,6 +161,11 @@ export interface AgentRuntimeConfig {
   };
   toolAllowlist?: readonly string[];
   toolDisallowlist?: readonly string[];
+  /**
+   * Sando prompt profile (SANDO_PROMPT_PROFILE). Absent or "default" = upstream prompt and tools unchanged;
+   * "lean" = short prompt + core tools for every model; "lean-local" = lean only for local-endpoint models.
+   */
+  promptProfile?: PromptProfileSetting;
   /**
    * Defaults to main. Explore child runtimes use the explore toolset to opt into
    * 只读探索工具白名单；是否包含 direct Glob/Grep 由 embedded search branch 决定。
