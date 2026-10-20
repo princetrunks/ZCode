@@ -48,6 +48,8 @@ export interface Model {
   readonly properties: ModelProperties;
   readonly optionSpecs: ModelOptionSpecs;
   readonly options: ModelOptions;
+  /** Sando: the provider's base URL is loopback or a private-network host (a self-hosted model). */
+  readonly localEndpoint?: boolean;
 
   bind(options?: ModelOptions): Model;
   generateText(request: ModelRequest): Promise<ModelResult>;

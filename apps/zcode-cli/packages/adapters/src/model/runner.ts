@@ -35,6 +35,8 @@ import { DEFAULT_MODEL_STREAM_IDLE_TIMEOUT_MS } from "./stream-idle-timeout.js";
 import { runGenerateText } from "./runner-generate.js";
 import { runStreamText } from "./runner-stream.js";
 import { normalizeReasoningHistory } from "./reasoning-history-normalization.js";
+import { applyReasoningHistoryPolicy, resolveReasoningProfile } from "./reasoning-profiles.js";
+import { isLocalEndpoint } from "./local-endpoint.js";
 import {
   defaultRuntime,
   type AiSdkModelRuntime,
@@ -265,6 +267,7 @@ export class AiSdkModelAdapter {
         reasoningLevel: optionSpecs.reasoningLevel,
       },
       options: options.options,
+      localEndpoint: isLocalEndpoint(options.providerConfig.api.baseUrl),
       executor: {
         generateText: (request) => {
           const legacyRequest = toLegacyRequest(request);
@@ -291,7 +294,7 @@ export class AiSdkModelAdapter {
     resolved: ResolvedAiSdkModel,
     resolveModel: () => ResolvedAiSdkModel,
   ): Promise<ModelTextResult> {
-    const projectedRequest = projectRequestHistory(request, resolved);
+    const projectedRequest = projectRequestHistory(request, resolved, this.env);
     return runGenerateText({
       debugDir: this.debugDir,
       env: this.env,
@@ -311,7 +314,7 @@ export class AiSdkModelAdapter {
     resolved: ResolvedAiSdkModel,
     resolveModel: () => ResolvedAiSdkModel,
   ): AsyncGenerator<ModelStreamEvent> {
-    const projectedRequest = projectRequestHistory(request, resolved);
+    const projectedRequest = projectRequestHistory(request, resolved, this.env);
     yield* runStreamText({
       debugDir: this.debugDir,
       env: this.env,
@@ -358,13 +361,24 @@ function assertSameBoundModel(
 function projectRequestHistory(
   request: AiSdkModelTextRequest,
   resolved: ResolvedAiSdkModel,
+  env: Record<string, string | undefined>,
 ): AiSdkModelTextRequest {
-  if (resolved.providerKind !== "anthropic") return request;
+  // Sando: per-model reasoning replay (reasoning-profiles.ts). Unmatched models get "passthrough",
+  // which returns the same array, so every current forge model sends exactly what it sent before.
+  const profile = resolveReasoningProfile(resolved.modelId, env);
+  const withProfile = applyReasoningHistoryPolicy(
+    request.messages,
+    profile.history,
+    (request.tools?.length ?? 0) > 0,
+  );
+  if (resolved.providerKind !== "anthropic") {
+    return withProfile === request.messages ? request : { ...request, messages: withProfile };
+  }
 
   // 结构归一化过去位于每次物理请求都会经过的 serializer，签名修复重试
   // 因而会再次删除上一轮刚补出的 assistant 占位并合并 user。逻辑请求入口只投影一次，
   // 后续 attempt 只能复用或从这份 request-local history 派生。
-  const messages = normalizeReasoningHistory(request.messages, {
+  const messages = normalizeReasoningHistory(withProfile, {
     providerId: resolved.providerId,
     modelId: resolved.modelId,
   });

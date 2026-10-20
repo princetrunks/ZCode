@@ -1,5 +1,58 @@
 # Fleet report: Sando
 
+## 2026-10-20: lean prompt profile for local models (branch `fleet/sando-lean-prompt-20261020`, Planner STP-2576)
+
+I worked only in the worktree `~/apps/ZCode-fleet-lean`, based on the reasoning-models branch. I did not merge, run
+`sando-rebuild` or touch `~/apps/ZCode`. The branch is pushed to `origin`. Full write-up: `REPORT-lean-prompt.md`; spec
+and study notes: `SANDO-LEAN-PROMPT.md`.
+
+- **Finding:** Sando's ~31k-token first request is mostly tool schemas, not prose. 26 tools come to ~28k tokens, and the
+  9 dynamic-workflow tools alone ~21.5k; the system text is ~2.5k. The CL4R1T4S prompts (read as references only) and
+  dsh agree on a short recipe:
+  - each rule is stated once;
+  - one rule line per tool that is actually present;
+  - one-sentence tool descriptions.
+- **Built:** an opt-in `SANDO_PROMPT_PROFILE=lean-local` (or `lean`).
+  - It gives a ~1.8k-char prompt plus Read/Write/Edit/Bash/TodoWrite with short descriptions. The user's own MCP tools
+    are kept.
+  - It only applies to models whose provider URL is loopback or private-network (new `Model.localEndpoint`).
+  - The main session only; subagents and workflows are unchanged.
+  - **Unset is unchanged:** request bodies are byte-identical to the base build, both CLI-only and full build.
+- **Live A/B on Bonsai 2 27B** (resident, nothing switched): the 4 tasks from the reasoning study plus 4 new harder ones,
+  × 2 reps, scored by hidden checks.
+  - Pass rate: **lean 14/16 = default 14/16**.
+  - Prompt tokens: **3.7× fewer**. First request: **16.5× smaller** (31.6k → 1.9k).
+  - Wall time: **2.4× less**.
+  - Compaction: default 12 times, lean 0.
+  - Ablation: default with only the workflow tools removed (an existing flag) comes out at −24% tokens.
+- **Tests:** core 37/37, CLI 39/39, adapters 14/14; `pnpm run build` OK; typecheck clean.
+- **Needs Chuck:**
+  - review the branch, and merge it if you want it;
+  - decide whether `lean-local` should become the forge default in `sando-rebuild`/sando-web env;
+  - optionally an A/B on CRACK, which needs a forge-mode switch I was not allowed to do.
+
+## 2026-10-19/20: reasoning profiles for DeepSeek V4.x / MiniMax M3.x (branch `fleet/sando-reasoning-models-20261019`)
+
+Worked only in the worktree `~/apps/ZCode-fleet-reasoning`; did not touch `~/apps/ZCode`, run `sando-rebuild` or merge.
+Pushed to `origin`. Full write-up with citations and numbers: `REPORT.md`; spec: `SANDO-REASONING.md`.
+
+- **Finding:** Sando already replays every turn's thinking (`reasoning_content` / signed `thinking`), which is what MiniMax
+  M2–M3.1 require and what DeepSeek's own V4.1 encoder does when tools are declared. dsh (DeepSeek Harness 0.2.1-rc.2) does
+  the same. Proven on MiniMax M3.1 Flash (free, OpenRouter): the model recalls a number that only existed in its previous
+  thinking 2/2 with replay, 0/2 without.
+- **Built:** per-model reasoning profiles (default `passthrough` = unchanged; MiniMax `keep-all`; DeepSeek
+  `keep-all-with-tools`), empty `reasoning_content` for DeepSeek on deepseek.com, MiniMax M3.1 effort levels (no
+  "disabled") + 131k cap, `SANDO_REASONING_HISTORY` override, a before/after request-body diff script.
+- **Tests:** core 31/31, CLI 35/35 (+5 e2e), adapters 12/12 (new), typecheck clean. Forge request bodies byte-identical to the
+  base build (bonsai2-27b, qwen3.8-27b, torii-1.5-9b).
+- **Live (Bonsai 2 27B, 4 synthetic tasks × 2):** before 8/8, after 8/8, thinking-on keep 8/8, thinking-on strip 8/8,
+  dsh 8/8 with ~5× fewer prompt tokens (Sando's ~31k system prompt is the real local-model cost). MiniMax M3.1 Flash
+  through Sando: 16/16.
+- **Forge:** neither new model is useful here (V4.1-Flash is 552B / smallest GGUF 233 GB; M3.1 weights not out, M3-sized
+  would be ≥91 GB). Planner STP-2565 re-checks M3.1 on Oct 23.
+- **Needs Chuck:** review/merge the branch; a `DEEPSEEK_API_KEY` (and/or `MINIMAX_API_KEY`) in the vault plus an OK for a
+  few cents of spend if you want the DeepSeek path tested live; decide whether to start the "lean prompt for local models" work.
+
 ## 2026-10-18: answerable forms + run flags (branch `fleet/sando-forms-20261018`)
 
 Worked only in the worktree `~/apps/ZCode-fleet-sando`. I did not touch `~/apps/ZCode` (the `sando` branch that sando-web serves),

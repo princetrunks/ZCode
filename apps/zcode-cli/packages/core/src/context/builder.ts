@@ -21,6 +21,7 @@ import { buildRequestUserContextSection } from "./sections/request-user-context.
 import { buildCurrentDateSection } from "./sections/current-date.js";
 import { buildMemorySection } from "./sections/memory.js";
 import { buildDesktopContextSection } from "./sections/desktop.js";
+import { buildLeanEnvSection, buildLeanSystemSection } from "./prompt-profile.js";
 import {
   buildContextManagementSection,
   buildDynamicBehaviorSection,
@@ -96,6 +97,17 @@ export class ContextBuilder {
       );
     }
     const isWorkflowActor = workflowActor !== undefined;
+
+    // Sando lean profile: one short prompt block + compact environment, then the same user context
+    // (AGENTS.md / CLAUDE.md, memory index, date). Skills, memory-writing instructions, output style and the
+    // long behaviour sections are left out. The resolver never selects lean for custom prompts or child sessions.
+    if (this.config.promptProfile === "lean" && !hasCustomSystemPrompt && !isWorkflowActor) {
+      return this.finishBuild([
+        buildLeanSystemSection(this.config.guidanceToolNames ?? []),
+        buildLeanEnvSection(this.config.envInfo, this.config.model),
+        ...this.userContextSections(),
+      ]);
+    }
 
     // 1. CLI / product prefix. Keep this as the short leading identity block.
     // 「You are ZCode, an interactive coding agent」对一个
@@ -187,6 +199,13 @@ export class ContextBuilder {
     }
 
     // 5. Meta user context: workspace instructions/project memory first, date second.
+    sections.push(...this.userContextSections());
+
+    return this.finishBuild(sections);
+  }
+
+  private userContextSections(): ContextSection[] {
+    const sections: ContextSection[] = [];
     const requestUserContextSection = buildRequestUserContextSection({
       userInstructions: this.config.userInstructions,
       memoryIndexContent: this.config.memoryIndexContent,
@@ -200,7 +219,10 @@ export class ContextBuilder {
     if (currentDateSection) {
       sections.push(currentDateSection);
     }
+    return sections;
+  }
 
+  private finishBuild(sections: ContextSection[]): ContextBuildResult {
     // 6. Custom sections
     sections.push(...this.customSections);
 

@@ -23,6 +23,7 @@ import { withOpenRouterAttributionHeaders } from "@zcode/shared";
 import { createAnthropicCompatFetch } from "./anthropic-stream-compat.js";
 import { createOpenAIResponsesJsonCompatFetch } from "./openai-responses-json-compat.js";
 import { createModelOptionMapFetch, type RawRequestBodyCapture } from "./model-option-map-fetch.js";
+import { createReasoningFieldFetch } from "./reasoning-field-fetch.js";
 import { createNetworkProxyFetch } from "../network/proxy-fetch.js";
 import { createOfficialCodingPlanGatewayFetch } from "./official-coding-plan-gateway.js";
 import { normalizeModelTlsFailure } from "./failure-tls.js";
@@ -304,7 +305,7 @@ export class AiSdkModelExecution {
           name: providerConfig.name ?? providerId,
           baseURL: providerConfig.baseURL,
           apiKey,
-          fetch: optionFetch,
+          fetch: createReasoningFieldFetch(optionFetch, providerConfig.baseURL),
           headers,
           // OpenAI Compatible 流式 usage 需要显式请求，Usage 是执行结果的一部分。
           includeUsage: true,

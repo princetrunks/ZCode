@@ -37,6 +37,11 @@ genuinely useful features that local models need. Maybe a product later (Harness
   - `--confine-to-cwd` is respected on restore.
   - Limits: edits made by Bash or the node REPL are not checkpointed, so they cannot be rewound.
 
+- **Reasoning profiles** (branch `fleet/sando-reasoning-models-20261019`, 2026-10-19, not merged; spec `SANDO-REASONING.md`):
+  per-model replay of the model's own thinking (MiniMax M2–M3.1 keep all; DeepSeek V4.x keep all with tools, as its encoder
+  does), MiniMax M3.1 effort/cap rules. Forge models unchanged (byte-identical requests). Measured side result: dsh solves our
+  synthetic tasks on Bonsai with ~5× fewer prompt tokens than Sando, so "context discipline" below is the bigger lever.
+
 ## Table stakes (what the best harnesses have): status
 | Feature | Claude Code / Codex / OpenCode | Sando today | Next step |
 |---|---|---|---|

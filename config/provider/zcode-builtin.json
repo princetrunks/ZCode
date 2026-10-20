@@ -1903,6 +1903,22 @@
           }
         },
         {
+          "modelMatch": ".*MiniMax-M3\\.1(?:[.\\-:/\\[].*)?",
+          "config": {
+            "properties": {
+              "contextWindow": 1000000
+            },
+            "optionSpecs": {
+              "reasoningLevel": {
+                "values": ["low", "medium", "high", "xhigh", "max"]
+              },
+              "maxOutputTokens": {
+                "max": 131072
+              }
+            }
+          }
+        },
+        {
           "modelMatch": ".*MiniMax-M2(?:[.\\-:/\\[].*)?",
           "config": {
             "properties": {
@@ -3235,6 +3251,28 @@
             "optionSpecs": {
               "reasoningLevel": {
                 "map": "{\n  \"thinking\": {\n    \"type\": reasoningLevel == \"enabled\" ? \"enabled\" : \"disabled\"\n  }\n}"
+              }
+            }
+          }
+        },
+        {
+          "modelMatch": ".*MiniMax-M3\\.1(?:[.\\-:/\\[].*)?",
+          "apiTypeMatch": "anthropic-messages",
+          "config": {
+            "optionSpecs": {
+              "reasoningLevel": {
+                "map": "{\n  \"thinking\": {\n    \"type\": \"adaptive\"\n  },\n  \"output_config\": {\n    \"effort\": reasoningLevel\n  }\n}"
+              }
+            }
+          }
+        },
+        {
+          "modelMatch": ".*MiniMax-M3\\.1(?:[.\\-:/\\[].*)?",
+          "apiTypeMatch": "openai-chat-completions",
+          "config": {
+            "optionSpecs": {
+              "reasoningLevel": {
+                "map": "{\n  \"reasoning_effort\": reasoningLevel\n}"
               }
             }
           }

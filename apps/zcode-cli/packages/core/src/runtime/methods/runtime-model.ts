@@ -60,6 +60,7 @@ export function withModelInvocationContext(
     properties: model.properties,
     optionSpecs: model.optionSpecs,
     options: model.options,
+    ...(model.localEndpoint === undefined ? {} : { localEndpoint: model.localEndpoint }),
     bind(options) {
       return withModelInvocationContext(model.bind(options), createContext);
     },
