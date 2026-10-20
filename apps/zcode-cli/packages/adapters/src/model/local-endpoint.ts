@@ -30,8 +30,12 @@ export function isLocalEndpoint(baseURL: string | undefined): boolean {
   }
   if (hostname.includes(":")) {
     if (hostname === "::1" || hostname === "::") return true;
-    const mapped = hostname.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
-    if (mapped) return isLocalEndpoint(`http://${mapped[1]}`);
+    // URL() normalizes IPv4-mapped addresses to hex: ::ffff:192.168.1.5 -> ::ffff:c0a8:105
+    const mapped = hostname.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/);
+    if (mapped) {
+      const [hi, lo] = [parseInt(mapped[1], 16), parseInt(mapped[2], 16)];
+      return isLocalEndpoint(`http://${hi >> 8}.${hi & 255}.${lo >> 8}.${lo & 255}`);
+    }
     return /^f[cd][0-9a-f]{0,2}:/.test(hostname) || /^fe[89ab][0-9a-f]?:/.test(hostname);
   }
   return false;
