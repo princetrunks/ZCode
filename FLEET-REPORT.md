@@ -1,5 +1,36 @@
 # Fleet report: Sando
 
+## 2026-10-20: lean prompt profile for local models (branch `fleet/sando-lean-prompt-20261020`, Planner STP-2576)
+
+I worked only in the worktree `~/apps/ZCode-fleet-lean`, based on the reasoning-models branch. I did not merge, run
+`sando-rebuild` or touch `~/apps/ZCode`. The branch is pushed to `origin`. Full write-up: `REPORT-lean-prompt.md`; spec
+and study notes: `SANDO-LEAN-PROMPT.md`.
+
+- **Finding:** Sando's ~31k-token first request is mostly tool schemas, not prose. 26 tools come to ~28k tokens, and the
+  9 dynamic-workflow tools alone ~21.5k; the system text is ~2.5k. The CL4R1T4S prompts (read as references only) and
+  dsh agree on a short recipe:
+  - each rule is stated once;
+  - one rule line per tool that is actually present;
+  - one-sentence tool descriptions.
+- **Built:** an opt-in `SANDO_PROMPT_PROFILE=lean-local` (or `lean`).
+  - It gives a ~1.8k-char prompt plus Read/Write/Edit/Bash/TodoWrite with short descriptions. The user's own MCP tools
+    are kept.
+  - It only applies to models whose provider URL is loopback or private-network (new `Model.localEndpoint`).
+  - The main session only; subagents and workflows are unchanged.
+  - **Unset is unchanged:** request bodies are byte-identical to the base build, both CLI-only and full build.
+- **Live A/B on Bonsai 2 27B** (resident, nothing switched): the 4 tasks from the reasoning study plus 4 new harder ones,
+  × 2 reps, scored by hidden checks.
+  - Pass rate: **lean 14/16 = default 14/16**.
+  - Prompt tokens: **3.7× fewer**. First request: **16.5× smaller** (31.6k → 1.9k).
+  - Wall time: **2.4× less**.
+  - Compaction: default 12 times, lean 0.
+  - Ablation: default with only the workflow tools removed (an existing flag) comes out at −24% tokens.
+- **Tests:** core 37/37, CLI 39/39, adapters 14/14; `pnpm run build` OK; typecheck clean.
+- **Needs Chuck:**
+  - review the branch, and merge it if you want it;
+  - decide whether `lean-local` should become the forge default in `sando-rebuild`/sando-web env;
+  - optionally an A/B on CRACK, which needs a forge-mode switch I was not allowed to do.
+
 ## 2026-10-19/20: reasoning profiles for DeepSeek V4.x / MiniMax M3.x (branch `fleet/sando-reasoning-models-20261019`)
 
 Worked only in the worktree `~/apps/ZCode-fleet-reasoning`; did not touch `~/apps/ZCode`, run `sando-rebuild` or merge.
