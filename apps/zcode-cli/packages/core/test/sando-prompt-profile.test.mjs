@@ -44,7 +44,8 @@ test("resolver: default unless opted in; lean-local only for local endpoints; ne
 const schema = (props) => ({ type: "object", properties: props, required: Object.keys(props).slice(0, 1) });
 const fullTools = [
   "Agent", "AskUserQuestion", "Bash", "Edit", "EnterPlanMode", "Read", "Skill", "TodoRead", "TodoWrite", "WebFetch",
-  "Write", "CreateWorkflow", "SaveWorkflow", "ListModels", "mcp__planner__get_task",
+  "Write", "CreateWorkflow", "SaveWorkflow", "ListModels", "mcp__node_repl__js", "mcp__computer_use__click",
+  "mcp__planner__get_task",
 ].map((name) => ({
   name,
   description: `long ${name} description `.repeat(50),
@@ -54,7 +55,7 @@ const fullTools = [
       : schema({ file_path: { type: "string", description: "path" } }),
 }));
 
-test("lean tools: core coding tools + MCP tools kept, short descriptions, schemas keep their shape", () => {
+test("lean tools: core coding tools + user MCP tools kept (official bundled servers dropped), short descriptions, schemas keep their shape", () => {
   const lean = projectLeanTools(fullTools);
   assert.deepEqual(
     lean.map((t) => t.name),

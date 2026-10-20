@@ -29,7 +29,7 @@ async function run(cli, tag) {
   fs.mkdirSync(path.join(home,".zcode","v2"),{recursive:true});
   const mc = {enabled:true,properties:{contextWindow:131072,supportsJsonSchemaOutput:false,supportsNativeWebSearch:false,supportsMidConversationSystem:false,inputFormat:{supportsImage:false,supportsVideo:false,supportsPdf:false}},optionSpecs:{reasoningLevel:{values:["disabled","enabled"],map:"{}"},maxOutputTokens:{max:8192}}};
   fs.writeFileSync(path.join(home,".zcode","v2","provider_config.json"), JSON.stringify({schemaVersion:1,config:{providerOrder:["p"],providerConfigRules:{providerRules:[{providerId:"p",enabled:true,config:{group:"standard-personal",access:{type:"api-key",apiKey:"x"},api:{type:"openai-chat-completions",baseUrl:`http://127.0.0.1:${port}/v1`},personalModelIds:[modelId],modelOrder:[modelId]}}]},modelConfigRules:{providerModelRules:[],manualProviderModelRules:[{providerId:"p",modelId,config:mc}]},defaultModelSelection:{providerId:"p",modelId}}}));
-  const sh = (args) => new Promise((resolve) => { const c = spawn(process.execPath, [cli, ...args], {cwd: ws, env: {...process.env, HOME: home}}); let o=""; c.stdout.on("data",(d)=>o+=d); c.on("close",()=>resolve(o)); });
+  const sh = (args) => new Promise((resolve) => { const c = spawn(process.execPath, [cli, ...args], {cwd: ws, env: {...process.env, HOME: home}}); let o=""; c.stdout.on("data",(d)=>o+=d); c.stderr.resume(); c.on("close",()=>resolve(o)); });
   const start = bodies.length;
   const o1 = JSON.parse(await sh(["-p","TURN1 read the readme","--model",`p/${modelId}`,"--json"]));
   await sh(["--resume", o1.sessionId, "-p","TURN2 again","--model",`p/${modelId}`,"--json"]);

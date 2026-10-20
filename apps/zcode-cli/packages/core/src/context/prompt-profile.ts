@@ -41,7 +41,10 @@ export function resolveEffectivePromptProfile(input: {
   return "lean";
 }
 
-/** Built-in tools the lean profile keeps. MCP / plugin tools (`mcp__…`) are kept too: the user configured them. */
+/**
+ * Built-in tools the lean profile keeps. Tools from MCP servers the user configured (`mcp__…`) are kept too, except
+ * the official bundled plugin servers (browser-use's node_repl, computer use), which are not coding tools.
+ */
 export const LEAN_TOOL_NAMES: ReadonlySet<string> = new Set([
   "Read",
   "Write",
@@ -69,8 +72,11 @@ const LEAN_PARAMETER_DESCRIPTIONS: Readonly<Record<string, Readonly<Record<strin
   Bash: { description: "A 5-10 word description of what the command does." },
 };
 
+const OFFICIAL_BUNDLED_MCP_PREFIXES = ["mcp__node_repl__", "mcp__computer_use__"] as const;
+
 export function isLeanTool(name: string): boolean {
-  return LEAN_TOOL_NAMES.has(name) || name.startsWith("mcp__");
+  if (LEAN_TOOL_NAMES.has(name)) return true;
+  return name.startsWith("mcp__") && !OFFICIAL_BUNDLED_MCP_PREFIXES.some((prefix) => name.startsWith(prefix));
 }
 
 /** Keeps the lean tool set and swaps in short descriptions; input schemas keep their shape (handlers validate them). */

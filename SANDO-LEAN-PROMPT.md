@@ -21,7 +21,7 @@ profile, while cloud providers configured in the same install (OpenRouter, Anthr
 | | default | lean |
 |---|---|---|
 | system prompt | CLI prefix + identity/harness + communication + memory instructions + environment + context management + autonomy + git snapshot (~9.9k chars) | one block: identity, a 4-step work loop, one rule line per tool that is actually present, the shared rules; compact environment (cwd, git branch/status, platform, model) (~1.8k chars) |
-| tools | 26 built-ins (incl. 9 dynamic-workflow tools ≈ 21.5k tokens, plan mode, AskUserQuestion, Agent, Skill, ...) | Read, Write, Edit, Bash, TodoWrite (+ Glob/Grep when registered) + any user-configured `mcp__*` tools |
+| tools | 26 built-ins (incl. 9 dynamic-workflow tools ≈ 21.5k tokens, plan mode, AskUserQuestion, Agent, Skill, ...) | Read, Write, Edit, Bash, TodoWrite (+ Glob/Grep when registered) + tools from MCP servers the user configured (the official bundled `node_repl` / `computer_use` servers are dropped) |
 | tool descriptions | upstream (Read 784 chars, Bash 1,032 + a 900-char `description` parameter doc, ...) | one or two sentences each; input schemas keep their exact shape (handlers validate against them) |
 | user context | AGENTS.md / CLAUDE.md, memory index, date (meta user message) | the same |
 | skills listing, memory-writing instructions, output style, desktop/mermaid/form hints | included when configured | left out |
@@ -42,8 +42,9 @@ actors and sessions with a caller-supplied system prompt keep their own prompt c
   `lean_system_prompt` + `env_info` + the usual user-context sections.
 - `bootstrap/src/app/runtime-config.ts` reads `SANDO_PROMPT_PROFILE` (only adds the key when set).
 
-The system prompt is built when the context is initialised and rebuilt on model change (`rebuildContextPrefix`), so a
-mid-session switch between a local and a cloud model under `lean-local` switches profile too.
+The context prefix is rebuilt at the start of every turn with the model actually used (`turn.ts` →
+`rebuildContextPrefix`), and the tool list is projected per model step, so a mid-session switch between a local and a
+cloud model under `lean-local` switches profile at the next turn.
 
 ## Why this shape (study notes)
 
