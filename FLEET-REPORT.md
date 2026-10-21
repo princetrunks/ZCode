@@ -1,5 +1,55 @@
 # Fleet report: Sando
 
+## 2026-10-21: DeepSeek reasoning-history policy vs deepseek-recipe parity (branch `fleet/sando-deepseek-recipe-20261021`, Planner #2580)
+
+Worked only in the worktree `~/apps/ZCode-fleet-deepseek-recipe`, branched from `sando` (this repo's actual
+default/integration branch -- 56 commits ahead of `main`, which tracks upstream and is not where fleet work lands; there is
+no `dev`/`staging` branch here). Did not touch `~/apps/ZCode`, any other fleet worktree, run `sando-rebuild`, or merge
+anything. Pushed to `origin`.
+
+- **What this checks:** whether Sando's own `applyReasoningHistoryPolicy(history, "keep-all-with-tools", hasTools)`
+  (`apps/zcode-cli/packages/adapters/src/model/reasoning-profiles.ts`, the DeepSeek `deepseek-tool-loop` profile) agrees
+  with DeepSeek's own protocol semantics, independently verified against `deepseek-recipe` (MIT,
+  `pip install deepseek-recipe==0.2.0`, DeepSeek's own chat-encoding/decoding library -- same encoding their API uses),
+  rather than against Sando's own re-implementation of the rule.
+- **Built:**
+  - `apps/zcode-cli/packages/adapters/test/support/sando-wire-projection.mjs`: a small, explicitly-documented minimal
+    mapping from Sando's internal `ModelInputMessage[]` history to an OpenAI-compatible wire body (`reasoning_content`
+    on every assistant turn, `tool_calls`/`tool_call_id`). Sando's own `toAiSdkMessages` targets the Vercel AI SDK's
+    message shape, not raw wire JSON -- the final JSON body is built by the third-party `@ai-sdk/openai-compatible`
+    package, so there was no existing Sando function that goes straight from its internal shape to wire JSON. The one
+    directly-reusable piece, `addMissingReasoningField`, is reused in the test as an idempotency check (our mapping
+    already satisfies its "every assistant message has `reasoning_content`" invariant).
+  - `apps/zcode-cli/packages/adapters/test/support/deepseek-recipe-bridge.{py,mjs}`: a minimal bridge (JSON over
+    stdin/stdout via `spawnSync`) that feeds the wire body to `ChatCompletionRequest(body).convert(ConversionOptions())`
+    and returns `conversation.messages` (role, content, reasoning_content, tool_calls, tool_call_id) as JSON. No network
+    calls, no model inference -- pure offline protocol-conversion logic.
+  - `apps/zcode-cli/packages/adapters/test/sando-deepseek-recipe-parity.test.mjs`: 5 synthetic multi-turn tool
+    conversations (no fixture is a call to a real model) covering: no tools declared at all; reasoning before AND after
+    the last user message with tools declared (showing nothing is dropped, not just the "after" half); a reminder-only
+    user message (`<system-reminder>...</system-reminder>`) that must not move the turn boundary, per the existing
+    `keep-current-turn` test's precedent; three sequential tool round-trips in one turn; and reasoning present on every
+    single assistant turn. Each fixture runs through Sando's policy, then the wire projection, then deepseek-recipe, and
+    asserts: message/role order matches, `reasoning_content` is non-empty exactly on the turns the policy says to keep
+    (empty everywhere else), and tool_call/tool_call_id pairing survives intact.
+  - A gitignored venv at `.venv-deepseek-recipe/` (`python3 -m venv .venv-deepseek-recipe && .venv-deepseek-recipe/bin/pip
+    install ~/apps/research/deepseek/_cache/deepseek_recipe-0.2.0-cp310-abi3-manylinux_2_28_x86_64.whl`), not touching
+    system Python or any other agent's venv.
+- **Tests:** `mise exec -- pnpm test` in `apps/zcode-cli/packages/adapters` (`pnpm --dir ../../../.. exec tsx --test
+  apps/zcode-cli/packages/adapters/test/*.test.mjs`) -- **19/19 pass** (the 5 new parity tests + the 14 pre-existing
+  adapters tests, including the reasoning-profiles suite, unaffected).
+- **Finding:** no mismatch. All 5 fixtures agree between Sando's policy output and deepseek-recipe's own conversion in
+  every assertion (turn order, reasoning placement, tool pairing) -- **tests only, no code change** to
+  `reasoning-profiles.ts` or anything else under `src/`.
+- **`pnpm install`:** ran clean (`mise exec -- pnpm install --frozen-lockfile`, exit 0, ~4s with the existing lockfile/
+  cache warm from sibling worktrees).
+- **Open/uncertain:** this only checks the DeepSeek `keep-all-with-tools` policy's *history* shape against
+  deepseek-recipe; it does not exercise reasoning-effort/wire-params mapping, streaming/response parsing, or the other
+  reasoning policies (MiniMax `keep-all`, etc.) against any reference implementation -- out of scope per the task. The
+  bridge script assumes DeepSeek's documented model names (`DeepSeek-V4.1-Flash`) rather than Sando's own model ids
+  (`deepseek-v4.1-flash`); deepseek-recipe resolves by its own name table, so this is cosmetic for the parity check but
+  would need a real alias table if reused for anything that cares about Sando's model ids specifically.
+
 ## 2026-10-20: lean prompt profile for local models (branch `fleet/sando-lean-prompt-20261020`, Planner STP-2576)
 
 I worked only in the worktree `~/apps/ZCode-fleet-lean`, based on the reasoning-models branch. I did not merge, run

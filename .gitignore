@@ -69,3 +69,6 @@ packages/desktop/.e2e-artifacts/
 packages/desktop/.e2e-cache/
 packages/desktop/.e2e-network-capture/
 .zcode-runtime/
+
+# DeepSeek-recipe parity test venv (fleet/sando-deepseek-recipe-20261021)
+/.venv-deepseek-recipe/
