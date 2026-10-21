@@ -30,6 +30,7 @@ export * from "./wire-codec.js";
 export * from "./wire-reassembly.js";
 export * from "./wire-assembler.js";
 export * from "./sessions-index.js";
+export * from "./sessions-index-pending.js";
 export * from "./sessions-index-workflow-activity.js";
 export * from "./workspace-config.js";
 export * from "./command.js";

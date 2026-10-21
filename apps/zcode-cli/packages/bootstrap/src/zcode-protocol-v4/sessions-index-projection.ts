@@ -3,6 +3,7 @@
 // 纯归约、无 IO；publisher（sessions-index-publisher）负责 seq 记账与帧构造，
 // 事件订阅与 flush 调度归 gateway（v4-gateway）。
 import {
+  deriveSessionPendingFacts,
   deriveSessionWorkflowActivity,
   type ConversationSnapshot,
   type SessionSummary,
@@ -47,6 +48,8 @@ function deriveSessionSummary(
     workflowRuns: snapshot.workflowRuns,
     backgroundWorks: snapshot.backgroundWorks,
   });
+  // Sando pending indicator: queue / sub-agent counts and an unanswered ```form (cheap: counts + one tail scan).
+  const pendingFacts = deriveSessionPendingFacts(snapshot);
   // workspaceHookReview 由 Hooks Settings 呈现，不降级成 permission/userInput 侧栏徽标。
   const pending = snapshot.pendingInteractions.find(
     (interaction) => interaction.kind === "permission" || interaction.kind === "userInput",
@@ -94,6 +97,12 @@ function deriveSessionSummary(
         }
       : {}),
     ...(snapshot.goal ? { goalStatus: snapshot.goal.status } : {}),
+    ...(pendingFacts.queuedCount > 0 ? { queuedCount: pendingFacts.queuedCount } : {}),
+    ...(pendingFacts.queuePaused ? { queuePaused: true as const } : {}),
+    ...(pendingFacts.runningSubagentCount > 0
+      ? { runningSubagentCount: pendingFacts.runningSubagentCount }
+      : {}),
+    ...(pendingFacts.awaitingForm ? { awaitingForm: true as const } : {}),
     lastActivityAt: extra.lastActivityAt,
     ...(lastAssistantPreview ? { lastAssistantPreview } : {}),
     createdAt: extra.createdAt,
@@ -118,6 +127,10 @@ function summariesEqual(a: SessionSummary, b: SessionSummary): boolean {
     a.pendingInteractionSummary?.permissionCount === b.pendingInteractionSummary?.permissionCount &&
     a.pendingInteractionSummary?.userInputCount === b.pendingInteractionSummary?.userInputCount &&
     a.goalStatus === b.goalStatus &&
+    a.queuedCount === b.queuedCount &&
+    a.queuePaused === b.queuePaused &&
+    a.runningSubagentCount === b.runningSubagentCount &&
+    a.awaitingForm === b.awaitingForm &&
     a.lastActivityAt === b.lastActivityAt &&
     a.lastAssistantPreview === b.lastAssistantPreview &&
     a.createdAt === b.createdAt

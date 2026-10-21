@@ -47,6 +47,11 @@ export const sessionSummarySchema = z.object({
   // optional 兼容旧 sessions-index frame / stored summary。
   pendingInteractionSummary: pendingInteractionSummarySchema.optional(),
   goalStatus: goalStateSchema.shape.status.optional(),
+  // Sando pending indicator (2026-10-21): counts only, no payload. optional = absent when zero / from older CLIs.
+  queuedCount: z.number().int().nonnegative().optional(),
+  queuePaused: z.literal(true).optional(),
+  runningSubagentCount: z.number().int().nonnegative().optional(),
+  awaitingForm: z.literal(true).optional(),
   // 未读推导：客户端本地记 lastSeenActivityAt 比较（不用 seq，epoch 会重置）。
   lastActivityAt: timestampSchema,
   // ≤120 字符。
