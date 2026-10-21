@@ -29,6 +29,11 @@ import { getTaskListAttention, getTaskListRowActivity } from "@/v4/taskListRowAc
 import { GroupedTaskContextMenuContent } from "@/workspace-grouped-tasks/task-context-menu-content.js";
 import { TaskRowActionButton } from "@/workspace-grouped-tasks/task-row-action-button.js";
 import { TaskInteractionBadge } from "@/TaskInteractionBadge.js";
+import { SessionPendingCounts } from "@/SessionPendingMarkers.js";
+import {
+  describeSessionPending,
+  deriveSessionPendingState,
+} from "@/lib/sessionPendingIndicator.js";
 import { formatGroupedTaskHoverChangeParts } from "@/workspace-grouped-tasks/task-row-tooltip.js";
 import {
   TASK_GROUP_ROW_CLASS,
@@ -135,13 +140,20 @@ function GroupedTaskRowComponent({
     buildTaskWorkspaceKey(activeWorkspacePath, activeWorkspaceIdentity) === workspaceKey &&
     activeTaskId === task.taskId;
   const isMobileActive = false;
+  // Sando pending indicator: amber = waiting on you; counts chip; one spoken / hover label for the status.
+  const pendingState = deriveSessionPendingState(task, taskActivity);
+  const formatPendingMessage = (id: string, values?: Record<string, string>) =>
+    intl.formatMessage({ id }, values);
+  const pendingLabel = describeSessionPending(pendingState, formatPendingMessage).join(" · ");
   const statusDotClassName =
     leadingIndicator === "error"
       ? "bg-destructive"
-      : leadingIndicator === "unread"
-        ? // grouped task 未读点需要和普通 task list 共用 sky 色，避免 brand 色在不同主题下表达漂移。
-          "bg-sky-500 dark:bg-sky-400"
-        : null;
+      : leadingIndicator === "waiting"
+        ? "bg-warning ring-2 ring-warning/25"
+        : leadingIndicator === "unread"
+          ? // grouped task 未读点需要和普通 task list 共用 sky 色，避免 brand 色在不同主题下表达漂移。
+            "bg-sky-500 dark:bg-sky-400"
+          : null;
   const canShowHoverActions = !dragOverlay;
   // 工作流运行行：分组行同样长在标题下；
   // drag overlay 只是纯展示，不挂确认副作用与点击入口。
@@ -200,12 +212,15 @@ function GroupedTaskRowComponent({
               {taskAttentionDisplay}
             </Badge>
           ) : null}
+          <SessionPendingCounts state={pendingState} formatMessage={formatPendingMessage} />
           <span
+            title={pendingLabel || undefined}
             className={cn(
               "flex shrink-0 items-center gap-1",
               canShowHoverActions && "group-hover/task-row:hidden",
             )}
           >
+            {pendingLabel ? <span className="sr-only">{pendingLabel}</span> : null}
             {leadingIndicator === "loading" ? (
               <LoaderIcon className="size-3.5 animate-spin text-foreground-subtle" />
             ) : statusDotClassName ? (
@@ -395,8 +410,10 @@ function GroupedTaskRowComponent({
               {taskAttentionDisplay}
             </Badge>
           ) : null}
+          <SessionPendingCounts state={pendingState} formatMessage={formatPendingMessage} />
+          {pendingLabel ? <span className="sr-only">{pendingLabel}</span> : null}
           {!shouldSuppressTaskMetadata ? (
-            <span className="flex shrink-0 items-center gap-1">
+            <span title={pendingLabel || undefined} className="flex shrink-0 items-center gap-1">
               {leadingIndicator === "loading" ? (
                 <LoaderIcon className="size-3.5 animate-spin text-foreground-subtle" />
               ) : statusDotClassName ? (

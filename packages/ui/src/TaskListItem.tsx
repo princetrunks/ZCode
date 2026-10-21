@@ -25,6 +25,11 @@ import {
 import { getTaskListAttention, getTaskListRowActivity } from "@/v4/taskListRowActivity.js";
 import { TaskListItemContextMenu } from "@/TaskListItemContextMenu.js";
 import { TaskInteractionBadge } from "@/TaskInteractionBadge.js";
+import { SessionPendingCounts, SessionWaitingDot } from "@/SessionPendingMarkers.js";
+import {
+  describeSessionPending,
+  deriveSessionPendingState,
+} from "@/lib/sessionPendingIndicator.js";
 import { useTaskListItemContextActions } from "@/useTaskListItemContextActions.js";
 import { useFeedbackStore } from "@/feedback/feedbackStore.js";
 import { useModelTrajectoryStore } from "@/store/modelTrajectoryStore.js";
@@ -362,6 +367,20 @@ export const MemoTaskItem = memo(function TaskListItem({
     () => deriveTaskLeadingIndicator(task, taskActivity),
     [task, taskActivity],
   );
+  // Sando pending indicator: counts beside the title, a spoken / hover label for the leading slot.
+  const pendingState = useMemo(
+    () => deriveSessionPendingState(task, taskActivity),
+    [task, taskActivity],
+  );
+  const pendingLabel = describeSessionPending(pendingState, (id, values) =>
+    intl.formatMessage({ id }, values),
+  ).join(" · ");
+  const pendingCountsNode = (
+    <SessionPendingCounts
+      state={pendingState}
+      formatMessage={(id, values) => intl.formatMessage({ id }, values)}
+    />
+  );
   const isTaskCron = isCronTask(task);
   // 月亮身份改为持久 meta 标记判断；off-peak store 反查在任务被删除后会丢失
   // 会话溯源，且让每一行多背一个全局 store 订阅。
@@ -555,6 +574,7 @@ export const MemoTaskItem = memo(function TaskListItem({
               让 hover/active 的层级由卡片背景承担，不再依赖分隔线。 */}
 
       <div
+        title={!shouldRenderPinAction && pendingLabel ? pendingLabel : undefined}
         className={cn(
           "relative flex size-4 shrink-0 items-center justify-center",
           // 行体是纵向列（标题行 + 运行行）时前置槽对齐首行而不是整行：默认 24px 首行居中 = 上留 4px。
@@ -571,6 +591,8 @@ export const MemoTaskItem = memo(function TaskListItem({
         >
           {leadingIndicator === "error" ? (
             <span data-error-indicator="true" className="h-1.5 w-1.5 rounded-full bg-destructive" />
+          ) : leadingIndicator === "waiting" ? (
+            <SessionWaitingDot />
           ) : leadingIndicator === "unread" ? (
             <span
               data-unread-indicator="true"
@@ -582,6 +604,7 @@ export const MemoTaskItem = memo(function TaskListItem({
             <span data-idle-indicator="true" className="h-1.5 w-1.5 rounded-full bg-border" />
           ) : null}
         </span>
+        {pendingLabel ? <span className="sr-only">{pendingLabel}</span> : null}
         {shouldRenderPinAction ? (
           <ControlHintTooltip
             title={
@@ -638,6 +661,7 @@ export const MemoTaskItem = memo(function TaskListItem({
                 {taskAttentionDisplay}
               </Badge>
             ) : null}
+            {pendingCountsNode}
           </div>
           <div className="flex min-w-0 items-center justify-between gap-2 text-ui-base text-foreground-subtle h-6">
             <div className="flex min-w-0 items-center gap-1.5">
@@ -741,6 +765,7 @@ export const MemoTaskItem = memo(function TaskListItem({
                   {taskAttentionDisplay}
                 </Badge>
               ) : null}
+              {pendingCountsNode}
             </div>
 
             {!hasPendingInteraction ? (

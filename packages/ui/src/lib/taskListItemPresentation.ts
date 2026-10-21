@@ -1,10 +1,11 @@
 import type { ZCodeTaskMeta } from "@zcode/shared";
 import type { TaskListRowActivity } from "@/v4/taskListRowActivity.js";
+import { deriveSessionPendingState } from "@/lib/sessionPendingIndicator.js";
 
 export function deriveTaskLeadingIndicator(
   task: ZCodeTaskMeta,
   activity: TaskListRowActivity | null,
-): "error" | "unread" | "loading" | "none" {
+): "error" | "waiting" | "unread" | "loading" | "none" {
   if (activity?.phase === "error") {
     return "error";
   }
@@ -13,6 +14,12 @@ export function deriveTaskLeadingIndicator(
   // 这种情况仅回退持久化 error；一旦有 sessions-index，phase 就是实时权威。
   if (!activity && task.status === "error") {
     return "error";
+  }
+
+  // Sando pending indicator: a session blocked on the user (approval, AskUserQuestion, an unanswered
+  // ```form) shows the amber dot ahead of unread / running, so "your turn" is never hidden by a spinner.
+  if (deriveSessionPendingState(task, activity).waiting) {
+    return "waiting";
   }
 
   // unread 是 tasks-index membership 字段，蓝点必须直接读取当前

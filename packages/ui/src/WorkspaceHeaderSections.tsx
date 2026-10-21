@@ -54,6 +54,8 @@ import { invalidateDeferredDraftSessionForSkillChange } from "@/lib/zcodeDraftSk
 import { refreshSharedSkillStoreForWorkspace } from "@/lib/skillStoreRefresh.js";
 import { refreshWorkspacePluginCapabilitiesAfterRemoteSync } from "@/lib/remotePluginSyncRefresh.js";
 import { useMcpStore } from "@/store/mcpStore.js";
+import { SessionPendingHeaderStatus } from "@/SessionPendingMarkers.js";
+import { useSessionPendingState } from "@/v4/useSessionPendingState.js";
 
 export type { WorkspaceHeaderState, WorkspaceHeaderTitleSectionProps };
 export {
@@ -150,6 +152,14 @@ export function WorkspaceHeaderTitleSection({
   });
   const pinnedTasks = headerPinnedTaskList.items;
   const activeTaskMeta = resolvedActiveTaskMeta ?? null;
+  // Sando pending indicator: "Working… · 2 queued messages · 1 sub-agent running" for the open session.
+  const activePendingState = useSessionPendingState({
+    sessionId: activeSessionId,
+    workspacePath: workspaceAbsPath,
+    workspaceIdentity,
+    remoteSessionId,
+    agentService: services.zcodeAgentService,
+  });
   const isPinned = Boolean(
     activeTaskId && pinnedTasks.some((task) => task.taskId === activeTaskId),
   );
@@ -490,6 +500,12 @@ export function WorkspaceHeaderTitleSection({
           </>
         ) : null} */}
       </h1>
+      {!isDraftNewTask && activeSessionId ? (
+        <SessionPendingHeaderStatus
+          state={activePendingState}
+          formatMessage={(id, values) => intl.formatMessage({ id }, values)}
+        />
+      ) : null}
       <div className="flex min-w-0 shrink-0 items-center gap-1">
         {!isDraftNewTask ? (
           <DropdownMenu open={taskMenuOpen} onOpenChange={setTaskMenuOpen}>

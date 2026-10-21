@@ -16,6 +16,11 @@ export interface TaskListRowActivity {
   pendingInteractions?: PendingInteractionSummary;
   /** 侧栏工作流运行行的数据；无 run 时缺席。 */
   workflowActivity?: SessionWorkflowActivity;
+  /** Sando pending indicator: queued inputs / paused queue / running sub-agents / unanswered ```form. */
+  queuedCount?: number;
+  queuePaused?: boolean;
+  runningSubagentCount?: number;
+  awaitingForm?: boolean;
 }
 
 export type TaskListMetaWithActivity = ZCodeTaskMeta & {

@@ -91,6 +91,12 @@ export function mapSessionSummaryToTaskMeta(
         ? { pendingInteractions: summary.pendingInteractionSummary }
         : {}),
       ...(summary.workflowActivity ? { workflowActivity: summary.workflowActivity } : {}),
+      ...(summary.queuedCount ? { queuedCount: summary.queuedCount } : {}),
+      ...(summary.queuePaused ? { queuePaused: true } : {}),
+      ...(summary.runningSubagentCount
+        ? { runningSubagentCount: summary.runningSubagentCount }
+        : {}),
+      ...(summary.awaitingForm ? { awaitingForm: true } : {}),
     },
   );
 }
