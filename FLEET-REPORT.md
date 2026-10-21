@@ -1,5 +1,99 @@
 # Fleet report: Sando
 
+## 2026-10-21: per-session pending indicator + prompt-injection suite (branch `fleet/sando-pending-20261021`, Planner SAN-2610)
+
+I worked only in the worktree `~/apps/ZCode-fleet-sando-pending`. I did not change `~/apps/ZCode`, run `sando-rebuild`,
+restart `sando-web.service` or merge anything. The branch is pushed to `origin`. The look follows the Planner brief
+(`chat-pending-indicator.md`); that worker had not built its UI yet, so the two may need a small alignment later.
+
+### What was already there
+Upstream's task list already had three markers:
+- a spinner while a turn runs;
+- a blue dot for an unread reply;
+- an "Awaiting approval" pill for permission prompts and AskUserQuestion.
+
+I kept all three. What was missing: queued and sub-agent counts, a marker for an unanswered ```form, any label a
+screen reader could read (the status slot was `aria-hidden`), and anything in the open session's header.
+
+### What I built (one commit per concern)
+1. **CLI facts** (`d9f66ab`). `deriveSessionPendingFacts` in `shared` gives:
+   - queued inputs;
+   - whether the queue is paused;
+   - running native sub-agents;
+   - `awaitingForm`: the newest finished reply has a ```form fence, the user has not written since, and no turn is
+     running.
+
+   These go into `SessionSummary` as optional fields that are absent when zero. Old frames and old CLIs still parse.
+   No thread text leaves the CLI. The projection already re-derives on every non-streaming event, so the counts stay
+   live with no new subscription.
+2. **Web** (`62625b1`, header fix `1114e31`).
+   - Rows, both flat/timeline and grouped:
+     - an amber dot when the session waits on you. It outranks unread and the spinner; error still wins.
+     - chips for queued messages and running sub-agents. The queue chip is amber when the queue is paused.
+     - a screen-reader label and a hover title, e.g. "Working… · 2 queued messages · 1 sub-agent running · New reply".
+   - Header of the open session: "Working… · 2 queued messages" or "Waiting for your form answers", as a status region.
+     - Below 768 px it shows only the icon and chips; the full sentence is in the tooltip and the label.
+     - It reads the ref-counted sessions-index store the sidebar already holds.
+   - en-US and zh-CN strings.
+3. **Prompt-injection suite** (`876ff08`). The kit is vendored under `apps/zcode-cli/packages/cli/test/redteam/`.
+   - `sandoAdapter.mjs` runs the real built CLI headless. Outside content is planted as a workspace file (page,
+     search results, email, attachment) and read with the real Read tool.
+   - "Executed" means it really happened on disk.
+
+### Tests and checks
+- Unit tests: `packages/ui/test/sessionPendingIndicator.test.ts` passes 10/10. It covers:
+  - fence rules and the answered / superseded / streaming / running cases;
+  - queue states and the sub-agent fallback;
+  - wire compatibility;
+  - projection upserts;
+  - priorities;
+  - labels in both locales.
+
+  The other UI tests still pass (21/21). `pnpm typecheck` is clean. `pnpm lint` has 0 errors; its 71 warnings are
+  pre-existing. The bootstrap typecheck is clean.
+- **Live check.** I ran the worktree's release on 127.0.0.1:5321 with a throwaway HOME and a scripted local model;
+  both are stopped now. All five states showed up in the list with the right labels:
+  - running + 2 queued;
+  - running + 2 sub-agents;
+  - waiting for approval;
+  - waiting for form answers;
+  - unread.
+
+  The headers said what they should. Answering the form cleared its amber dot, and opening the unread session cleared
+  its blue dot.
+- **Phone, 390 px.** There is no sideways scroll, and no chip, pill or title wraps or is clipped. I checked this both
+  in code and by eye.
+  - The first screenshot showed the header pill's chip sliding under the ⋯ button, which is fixed.
+  - Known trade-off: upstream already truncates the phone header title to about 4 characters, and the pill costs about
+    1 more.
+- Screenshots: `~/Desktop/Mac_Phoenix_Shared/UI_Pending_Indicator/sando-*.png` (desktop list / agents / form / approval
+  / after-answer, phone drawer and three headers).
+
+### Security (white-hat kit, worst-case model, real CLI, no GPU)
+
+| mode | side effects executed | system prompt leaked |
+|---|---|---|
+| build | 0/39 (asserted) | 25/39 |
+| plan | 0/39 | 25/39 |
+| edit | 39/39 (Write is auto-approved, Bash held) | 25/39 |
+| **yolo** (the `-p` default; also what `run_agent({engine:'zcode'})` passes) | 39/39 | 25/39 |
+
+The leaks happen because Sando has no output filter. The live run against a real local model was not done; it needs
+the GPU lock and a model choice.
+
+### Not done / limits
+- A session whose last reply is a form shows the amber dot only once the CLI has a live projection of it. A cold
+  stored summary after a CLI restart does not carry it until the session is touched.
+- The "Tasks" (scratch workspace) section stays empty after creating a task there. This is the same on the
+  untouched release; I checked it side by side. It is not from this branch.
+- The running marker is upstream's spinner, not a pulsing dot. I kept it because it was already there.
+
+### Needs Chuck
+- Review and merge into `sando`, then `sando-rebuild`.
+- Decide on headless safety: should `-p` default to `build`? Or should the Planner's `toolGate.js` model (a taint gate
+  after outside content) and an output filter come to Sando, given that `run_agent` uses yolo?
+- Optional: a live redteam baseline on a local model. Pick the model; it needs a GPU lock window.
+
 ## 2026-10-20: lean prompt profile for local models (branch `fleet/sando-lean-prompt-20261020`, Planner STP-2576)
 
 I worked only in the worktree `~/apps/ZCode-fleet-lean`, based on the reasoning-models branch. I did not merge, run

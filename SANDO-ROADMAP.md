@@ -42,6 +42,27 @@ genuinely useful features that local models need. Maybe a product later (Harness
   does), MiniMax M3.1 effort/cap rules. Forge models unchanged (byte-identical requests). Measured side result: dsh solves our
   synthetic tasks on Bonsai with ~5× fewer prompt tokens than Sando, so "context discipline" below is the bigger lever.
 
+- **Per-session pending indicator** (branch `fleet/sando-pending-20261021`, 2026-10-21, not merged). It uses the
+  same vocabulary as the Planner's Chat and Lily lists. Upstream already had a spinner (a turn is running), a blue
+  dot (unread) and an "Awaiting approval" pill. Sando adds:
+  - an amber dot when the session is waiting on you (approval, a question, or an unanswered ```form);
+  - count chips for queued messages and for sub-agents that are running;
+  - screen-reader labels and hover tooltips on every row;
+  - a status pill in the open session's header ("Working… · 2 queued messages · 1 sub-agent running").
+
+  The counts travel in the sessions-index summary as optional fields: counts only, no thread text. They work in the
+  desktop sidebar and in the phone drawer, with no sideways scroll at 390 px.
+- **White-hat prompt-injection suite** (same branch). The kit runs through the real CLI with a worst-case model:
+  `apps/zcode-cli/packages/cli/test/sando-redteam.e2e.test.mjs`.
+  - `--mode build` and `--mode plan` hold every injected side effect (0/39 executed).
+  - `--mode edit` executes the Write in 39/39 cases, because edit mode auto-approves file writes.
+  - `--mode yolo` executes both in 39/39 cases, and **yolo is the `sando -p` default** (the Planner's
+    `run_agent({engine:'zcode'})` also passes it).
+  - In every mode the system prompt leaks in 25/39 cases, because there is no output filter.
+
+  Next steps: a data fence and taint gate for outside content in yolo (the Planner's `toolGate.js` model), an
+  output filter, and a live baseline on a local model.
+
 ## Table stakes (what the best harnesses have): status
 | Feature | Claude Code / Codex / OpenCode | Sando today | Next step |
 |---|---|---|---|
@@ -50,6 +71,8 @@ genuinely useful features that local models need. Maybe a product later (Harness
 | Hooks, skills, plugins, MCP | yes | yes (plugin) | ship a hooks recipe library |
 | Context compaction | yes | upstream | tune for 16k–64k local windows (CRACK voice, Torii 32k) |
 | Background tasks that outlive the session | partial | no | tmux/systemd-backed jobs with ntfy on finish |
+| Per-session status in the session list (running / queued / waiting on you / unread) | yes (Claude Code remote) | done on branch (2026-10-21) | merge; reuse the summary fields in the TUI session picker |
+| Prompt-injection defences for headless runs | gates + fences | permission modes only; `-p` defaults to yolo | taint gate for outside content in yolo, output filter |
 
 ## Where Sando can lead (local-model specific)
 1. **Self-tuning harness (Harness²).** Sando evolves its own prompt, skills and guardrails per model and per codebase, graded by real
