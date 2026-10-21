@@ -107,7 +107,9 @@ function SessionPendingHeaderStatusImpl({
       aria-label={label}
       title={label}
       className={cn(
-        "inline-flex min-w-0 shrink items-center gap-1.5 rounded-full px-2 py-0.5 text-ui-sm font-normal",
+        // Phones show only icon + chips: never shrink (a squeezed pill pushed its chip over the ⋯ button
+        // at 390 px); the truncating title gives way instead. From 768 px the sentence may truncate.
+        "inline-flex shrink-0 items-center gap-1.5 rounded-full px-2 py-0.5 text-ui-sm font-normal md:min-w-0 md:shrink",
         state.waiting ? "bg-warning/12 text-warning" : "bg-secondary text-foreground-subtle",
       )}
     >
