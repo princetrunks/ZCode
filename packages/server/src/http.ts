@@ -239,6 +239,29 @@ function tokensEqual(given: string | null | undefined, expected: string): boolea
   return timingSafeEqual(a, b);
 }
 
+// Sando 2026-10-22 (threat logging): one "[sando-auth]" JSON line per refused request (bad/missing token, foreign WS Origin)
+// on stderr -> the sando-web journal, where the forge's threat-watch counts them. No token, cookie or query value is logged;
+// at most 20 lines per client IP a minute.
+const authLogBudget = new Map<string, { minute: number; n: number }>();
+function logAuthRefusal(c: Context, status: number, reason: string): void {
+  const ip = (c.req.header("cf-connecting-ip") || (c.req.header("x-forwarded-for") || "").split(",").pop() || "").trim().slice(0, 64) || "local";
+  const minute = Math.floor(Date.now() / 60000);
+  const b = authLogBudget.get(ip);
+  if (!b || b.minute !== minute) {
+    if (authLogBudget.size > 2000) authLogBudget.clear();
+    authLogBudget.set(ip, { minute, n: 1 });
+  } else if (++b.n > 20) {
+    return;
+  }
+  const line = {
+    ts: new Date().toISOString(), status, reason, ip,
+    country: (c.req.header("cf-ipcountry") || "").slice(0, 2) || undefined,
+    method: c.req.method, path: new URL(c.req.url).pathname.slice(0, 200),
+    ua: (c.req.header("user-agent") || "").replace(/[\u0000-\u001f]/g, "").slice(0, 160) || undefined,
+  };
+  console.warn(`[sando-auth] ${JSON.stringify(line)}`);
+}
+
 function isHttpsRequest(c: Context): boolean {
   const proto = ((c.req.header("x-forwarded-proto") || "").split(",")[0] ?? "").trim().toLowerCase();
   return proto === "https" || new URL(c.req.url).protocol === "https:";
@@ -356,6 +379,7 @@ export function createHttpServer(
   app.use("*", async (c, next) => {
     const pathname = new URL(c.req.url).pathname;
     if ((pathname === "/ws" || pathname.startsWith("/ws/")) && !isAllowedWebSocketOrigin(c)) {
+      logAuthRefusal(c, 403, "bad_origin");
       return c.json({ error: "Forbidden origin" }, 403);
     }
     await next();
@@ -370,6 +394,7 @@ export function createHttpServer(
         await next();
         return;
       }
+      logAuthRefusal(c, 401, "bad_token");
       return c.json({ error: "Unauthorized" }, 401);
     });
   }
@@ -396,6 +421,7 @@ export function createHttpServer(
   app.use("/ws/host", async (c, next) => {
     const capability = c.req.header(ZCODE_RPC_HOST_CAPABILITY_HEADER);
     if (!hostCapabilities.consume(capability)) {
+      logAuthRefusal(c, 401, "bad_host_capability");
       return c.json({ error: "Invalid or expired host capability" }, 401);
     }
     await next();
