@@ -1,5 +1,5 @@
 /* eslint-disable max-lines -- HTTP、WebSocket 与静态资源路由集中注册，保持同一鉴权顺序。 */
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
 import { basename, extname, relative, resolve, sep } from "node:path";
 import { hostname } from "node:os";
@@ -229,16 +229,60 @@ function parseCookieHeader(header: string | undefined): Map<string, string> {
   return cookies;
 }
 
+// Sando 2026-10-22 (security follow-up): constant-time token compare (hash both sides so lengths always match).
+function tokensEqual(given: string | null | undefined, expected: string): boolean {
+  if (typeof given !== "string" || !given) {
+    return false;
+  }
+  const a = createHash("sha256").update(given).digest();
+  const b = createHash("sha256").update(expected).digest();
+  return timingSafeEqual(a, b);
+}
+
+function isHttpsRequest(c: Context): boolean {
+  const proto = ((c.req.header("x-forwarded-proto") || "").split(",")[0] ?? "").trim().toLowerCase();
+  return proto === "https" || new URL(c.req.url).protocol === "https:";
+}
+
 function hasValidLiteToken(c: Context, token: string): boolean {
   const url = new URL(c.req.url);
-  if (url.searchParams.get("token") === token) {
+  if (tokensEqual(url.searchParams.get("token"), token)) {
+    // Secure whenever the browser is on https (the tunnel / tailscale serve); plain-http LAN still gets a cookie.
+    const secure = isHttpsRequest(c) ? "; Secure" : "";
     c.header(
       "Set-Cookie",
-      `${zcodeLiteTokenCookieName}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax`,
+      `${zcodeLiteTokenCookieName}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax${secure}`,
     );
     return true;
   }
-  return parseCookieHeader(c.req.header("cookie")).get(zcodeLiteTokenCookieName) === token;
+  const raw = parseCookieHeader(c.req.header("cookie")).get(zcodeLiteTokenCookieName);
+  let cookie: string | undefined;
+  try {
+    cookie = raw === undefined ? undefined : decodeURIComponent(raw);
+  } catch {
+    cookie = raw;
+  }
+  return tokensEqual(raw, token) || tokensEqual(cookie, token);
+}
+
+// Sando 2026-10-22: a WebSocket upgrade must come from our own page (Origin host == Host), or from a non-browser client
+// (no Origin). Stops another *.shrinetech.io page from riding the same-site cookie into /ws (cross-site WS hijacking).
+// ZCODE_ALLOWED_ORIGINS (comma-separated origins) adds exceptions.
+function isAllowedWebSocketOrigin(c: Context): boolean {
+  const origin = c.req.header("origin");
+  if (!origin) {
+    return true;
+  }
+  const extra = (process.env["ZCODE_ALLOWED_ORIGINS"] || "").split(",").map((s) => s.trim()).filter(Boolean);
+  if (extra.includes(origin)) {
+    return true;
+  }
+  try {
+    const host = ((c.req.header("x-forwarded-host") || c.req.header("host") || "").split(",")[0] ?? "").trim().toLowerCase();
+    return Boolean(host) && new URL(origin).host.toLowerCase() === host;
+  } catch {
+    return false;
+  }
 }
 
 function isTokenProtectedPath(pathname: string): boolean {
@@ -308,6 +352,14 @@ export function createHttpServer(
   const app = new Hono();
   const { injectWebSocket, upgradeWebSocket } = createNodeWebSocket({ app });
   const hostCapabilities = createHostCapabilityStore();
+
+  app.use("*", async (c, next) => {
+    const pathname = new URL(c.req.url).pathname;
+    if ((pathname === "/ws" || pathname.startsWith("/ws/")) && !isAllowedWebSocketOrigin(c)) {
+      return c.json({ error: "Forbidden origin" }, 403);
+    }
+    await next();
+  });
 
   const authToken = options.authToken?.trim();
   if (authToken) {

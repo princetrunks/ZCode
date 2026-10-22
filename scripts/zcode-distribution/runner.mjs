@@ -170,10 +170,14 @@ async function assertRuntimeFiles() {
 async function serve(options) {
   await assertRuntimeFiles();
   const port = options.port && options.port > 0 ? options.port : await pickPort(options.host);
-  const protect = options.tokenEnabled ?? shouldProtectHost(options.host);
-  const token = protect ? (options.token ?? createToken()) : "";
+  // Sando 2026-10-22: the token may come from ZCODE_WEB_TOKEN so it never sits in the process command line (`ps`), and a
+  // token from the environment always turns protection on, even on 127.0.0.1 (cloudflared reaches us over loopback).
+  const envToken = process.env.ZCODE_WEB_TOKEN?.trim() || "";
+  const protect = options.tokenEnabled ?? (envToken ? true : shouldProtectHost(options.host));
+  const token = protect ? (options.token ?? (envToken || createToken())) : "";
+  const shownToken = envToken && token === envToken ? "" : token; // never print an env-supplied token into the journal
   const open = options.open ?? isLocalHost(options.host);
-  const localUrl = formatUrl(options.host, port, token);
+  const localUrl = formatUrl(options.host, port, shownToken);
 
   const child = spawn(process.execPath, [serverEntry], {
     cwd: options.workspace,
@@ -212,7 +216,7 @@ async function serve(options) {
   console.log("ZCode Web is running");
   console.log(`Local:   ${localUrl}`);
   if (options.host === "0.0.0.0" || options.host === "::") {
-    for (const url of networkUrls(port, token)) {
+    for (const url of networkUrls(port, shownToken)) {
       console.log(`Network: ${url}`);
     }
   }
