@@ -35,6 +35,8 @@ export interface InvisibleScrubResult {
   smuggled: boolean;
 }
 
+// Matching lone variation selectors is the point here, so the "combining class" lint does not apply.
+// eslint-disable-next-line no-misleading-character-class
 const ANY_INVISIBLE = /[\uFE00-\uFE0F\u{E0000}-\u{E007F}\u{E0100}-\u{E01EF}]/u;
 const SINGLE_EMOJI = /^\p{Emoji}$/u;
 const BLACK_FLAG = 0x1f3f4;
@@ -112,11 +114,19 @@ export function scrubInvisible(input: string | null | undefined): InvisibleScrub
   const found: InvisibleSmugglingLabel[] = [];
   if (tags > 0) found.push(INVISIBLE_TAG_LABEL);
   if (runs > 0 || stray >= INVISIBLE_STRAY_SELECTOR_LIMIT) found.push(INVISIBLE_SELECTOR_LABEL);
-  return { text: out.join(""), found, removed: { tags, selectors }, runs, smuggled: found.length > 0 };
+  return {
+    text: out.join(""),
+    found,
+    removed: { tags, selectors },
+    runs,
+    smuggled: found.length > 0,
+  };
 }
 
 /** One visible line telling the model that hidden characters were taken out, or "" when not smuggled. */
-export function scrubInvisibleNote(result: Pick<InvisibleScrubResult, "removed" | "found" | "smuggled">): string {
+export function scrubInvisibleNote(
+  result: Pick<InvisibleScrubResult, "removed" | "found" | "smuggled">,
+): string {
   if (!result.smuggled) return "";
   const n = result.removed.tags + result.removed.selectors;
   return `[${n} hidden character${n === 1 ? "" : "s"} removed: ${result.found.join(", ")}]`;
