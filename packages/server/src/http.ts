@@ -37,6 +37,7 @@ import {
 } from "@zcode/shared";
 import { connectRemote, createRemoteBackend, type RemoteConnection } from "./remote/index.js";
 import { createHostCapabilityStore } from "./hostCapability.js";
+import { fetchPlannerNotes, plannerNotesConfig } from "./plannerNotes.js";
 
 function wrapWebSocket(ws: WebSocket): ISocket {
   const onData = new Emitter<VSBuffer>();
@@ -401,6 +402,11 @@ export function createHttpServer(
 
   app.get("/api/server-info", (c) => c.json(createServerInfo(options)));
   app.post("/api/rpc-host-capability", (c) => c.json(hostCapabilities.issue()));
+  // Sando: read-only "Updates" from the Planner's main chat (plannerNotes.ts). Under /api/*, so token-protected; the Planner JWT
+  // stays on this server.
+  app.get("/api/sando/planner-notes", async (c) =>
+    c.json(await fetchPlannerNotes(plannerNotesConfig(), { since: c.req.query("since") ?? null, limit: Number(c.req.query("limit") ?? 20) })),
+  );
 
   // 普通 `/ws` 永远是 terminal-client；浏览器/任意客户端设置旧 mode header
   // 都不能再把自己提升为 trusted host。
