@@ -1,5 +1,58 @@
 # Fleet report: Sando
 
+## 2026-10-23: invisible-character smuggling filter (branch `fleet/vs-smuggling-20261023`, RD-2628)
+
+I worked only in the worktree `~/apps/ZCode-wt-vs-smuggling`. **Not rebuilt or merged; Chuck promotes Sando.** I did
+not touch `~/apps/ZCode`, run `sando-rebuild` or restart anything. The branch is pushed to `origin`.
+
+- **Problem:** Sando had no filter for invisible "smuggling" characters. A run of variation selectors after an emoji
+  (one selector per byte) or Unicode tag characters can spell out a whole hidden instruction. A person sees only the
+  emoji; the model can read the bytes.
+- **Helper:** `scrubInvisible()` in `@zcode/contracts` (`packages/contracts/src/model/invisible-chars.ts`). It uses the
+  same rules as the Planner's `invisibleChars.js`:
+  - Kept: a single FE0E/FE0F after an emoji (so ❤️, ☺︎, 1️⃣ and 🏳️‍🌈 are unchanged) and subdivision flags such as
+    England's.
+  - Removed: every other selector and every other tag character.
+  - Flagged as smuggling: any tag character outside a flag, a run of 3 or more selectors, or 4 or more stray selectors
+    in one text.
+- **Where it is wired (one main choke point):** `buildProviderRequestMessages` in `core`. This is the function that
+  turns history into the messages for every model request: the main turn (including `sando -p` headless), subagents,
+  compaction, the memory agent and verification.
+  - It covers user prompts, pasted or attached files (`prompt_attachment`), context entries, and all tool results:
+    Read, Bash, WebFetch, WebSearch and MCP.
+  - Only the copy sent to the model is cleaned. Saved history keeps the original, so rewind, fork and the UI are
+    unchanged.
+  - Assistant messages are left alone, so signed reasoning is replayed byte-identical. Images and other binary media
+    are not touched.
+  - When a tool result or attachment contained smuggling, it starts with a visible line:
+    `[N hidden characters removed: variation-selector smuggling]`.
+  - The runtime logs one `[sando-invisible]` warn line per finding. It holds counts only, never the hidden text, and
+    is not repeated when the same history is sent again.
+  - Two side calls skip that function, so each is cleaned where it is built:
+    - the WebFetch extraction prompt (the page goes to a helper model first; the note is carried onto its answer);
+    - the session-title generator.
+- **Tests:**
+  - New contracts unit tests: 7/7. Real emoji, flags and CJK text are unchanged; runs and tags are removed; the
+    result is idempotent.
+  - New core live-path tests: 6/6. The kit cases vs-smuggle-01 (user), 02 (page, both as a tool result and as the
+    WebFetch extraction prompt) and 03 (attachment) are copied into `core/test/fixtures` together with the
+    encoder/decoder. In every case `vsDecodeAll` finds nothing, "Banana bread" and "milk" survive, and the note and
+    log line appear. No model was called.
+  - Core suite: 43/43. Typecheck is clean for contracts, core, adapters and bootstrap. `architecture:check` is OK.
+  - oxlint is clean on every changed file. The package-wide `pnpm lint` still fails on old `max-lines` errors in
+    files I did not touch (`model/index.ts`, `session-fork.ts`, …).
+  - To run the tests I ran `pnpm install --offline --ignore-scripts` and built the library packages with tsc inside
+    the worktree. The CLI bundle (`zcode.cjs`) was not built.
+- **Not covered or not tested:**
+  - A live `sando -p` run against a model.
+  - The memory-agent loop's own tool messages. They read local memory files, and their requests still pass through
+    the projection.
+  - Text sent inside a base64 `file` data URL (for example a text/plain file sent as raw file data).
+  - A user prompt with smuggling is cleaned and logged, but gets no visible note (only tool results and attachments
+    do).
+  - Duplicate logs are suppressed by a key built from counts and length. Two different messages with identical
+    counts in one process are logged only once.
+
 ## 2026-10-20: lean prompt profile for local models (branch `fleet/sando-lean-prompt-20261020`, Planner STP-2576)
 
 I worked only in the worktree `~/apps/ZCode-fleet-lean`, based on the reasoning-models branch. I did not merge, run
