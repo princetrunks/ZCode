@@ -92,7 +92,8 @@
     "clean": "node ../../scripts/clean-dist.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "oxlint src",
-    "lint:fix": "oxlint --write src"
+    "lint:fix": "oxlint --write src",
+    "test": "pnpm --dir ../../../.. exec tsx --test apps/zcode-cli/packages/contracts/test/*.test.mjs"
   },
   "dependencies": {
     "@zcode/shared": "workspace:*",
