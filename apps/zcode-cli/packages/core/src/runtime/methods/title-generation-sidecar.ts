@@ -11,7 +11,7 @@ import type {
   SessionEvent,
   TraceContext,
 } from "../deps.js";
-import type { AgentTelemetryCausation } from "@zcode/contracts";
+import { scrubInvisible, type AgentTelemetryCausation } from "@zcode/contracts";
 import type { AgentRuntimeInternal } from "../internal.js";
 import { createRefreshRuntimeHeadersBeforeModelAttempt } from "./model-runtime-headers.js";
 import { recordModelUsageFact } from "./usage-observability.js";
@@ -215,7 +215,8 @@ async function generateTitleCandidateImpl(
 }
 
 export function normalizeTitleInput(input: string): string {
-  const normalized = input.trim().replace(/\s+/g, " ");
+  // RD-2628：标题侧车不经过 provider 投影出口，先清洗不可见走私字符，避免隐藏指令影响标题。
+  const normalized = scrubInvisible(input).text.trim().replace(/\s+/g, " ");
   return normalized.length > MAX_TITLE_INPUT_CHARS
     ? normalized.slice(0, MAX_TITLE_INPUT_CHARS)
     : normalized;

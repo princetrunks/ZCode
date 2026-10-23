@@ -2,6 +2,8 @@ import {
   CoreErrorType,
   createCoreError,
   runWithModelInvocationContext,
+  scrubInvisible,
+  scrubInvisibleNote,
   type ModelInputMessage,
   type WebFetchInput,
 } from "@zcode/contracts";
@@ -42,7 +44,10 @@ export async function processFetchedContent(
     );
   }
 
-  const { content, truncated } = truncateContentForModel(fetched.content);
+  // RD-2628：页面原文会先交给提取模型，provider 投影出口的清洗覆盖不到这一跳，这里先清洗并保留可见提示。
+  const scrubbed = scrubInvisible(fetched.content);
+  const scrubNote = scrubInvisibleNote(scrubbed);
+  const { content, truncated } = truncateContentForModel(scrubbed.text);
   const messages: ModelInputMessage[] = [
     {
       role: "user",
@@ -75,9 +80,10 @@ export async function processFetchedContent(
         }),
     );
 
+    const extracted =
+      result.text.trim() || "WebFetch completed, but the extraction model returned no text.";
     return {
-      result:
-        result.text.trim() || "WebFetch completed, but the extraction model returned no text.",
+      result: scrubNote ? `${scrubNote}\n${extracted}` : extracted,
       truncated,
     };
   } catch (error) {

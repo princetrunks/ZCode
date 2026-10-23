@@ -23,6 +23,10 @@ import {
   wrapSystemReminderForSource,
   type SystemReminderSource,
 } from "../../system-reminder/source.js";
+import {
+  scrubProviderRequestMessages,
+  type InvisibleScrubFinding,
+} from "./provider-invisible-scrub.js";
 
 export interface ProviderRequestMessageProjectionResult {
   messages: ModelInputMessage[];
@@ -33,6 +37,8 @@ export interface ProviderRequestMessageProjectionResult {
     latestRealUserMessageIndex?: number;
     strippedRuntimeMetaCount: number;
     cacheControlIndex?: number;
+    /** Invisible-character smuggling removed from this request (counts only; RD-2628). */
+    invisibleScrubFindings: InvisibleScrubFinding[];
   };
 }
 
@@ -63,7 +69,13 @@ export function buildProviderRequestMessages(input: {
   // media-budget 在 provider-clean messages 上运行，必须在剥离 metadata 前记录
   // latest real user 的 projection 后索引，避免用户 literal system-reminder 被误当成 meta。
   const latestRealUserMessageIndex = findLatestRealUserEntryIndex(projectedEntries, origins);
-  const renderedMessages = projectedEntries.map(renderProjectedEntryToModelMessage);
+  // RD-2628：所有 provider 请求的唯一投影出口，在这里清洗不可见走私字符（只改 request-local 副本，
+  // canonical history 与持久化保持原文）；附件类 reminder 与 tool result 一样加可见提示行。
+  const invisibleScrub = scrubProviderRequestMessages(
+    projectedEntries.map(renderProjectedEntryToModelMessage),
+    { carriesOutsideContent: (index) => isOutsideContentAttachment(projectedEntries[index]) },
+  );
+  const renderedMessages = invisibleScrub.messages;
   const mergeResult = ENABLE_MCS_ADJACENT_USER_MERGE
     ? mergeAdjacentUserMessages(renderedMessages)
     : skipAdjacentUserMessageMerge(renderedMessages);
@@ -94,8 +106,18 @@ export function buildProviderRequestMessages(input: {
         : {}),
       strippedRuntimeMetaCount: input.entries.filter((entry) => entry.metadata).length,
       ...(cacheControlIndex !== undefined ? { cacheControlIndex } : {}),
+      invisibleScrubFindings: invisibleScrub.findings,
     },
   };
+}
+
+// 用户粘贴或附加的文件以 prompt_attachment reminder 进入请求，属于外部内容。
+const OUTSIDE_CONTENT_ATTACHMENT_SOURCES: ReadonlySet<string> = new Set(["prompt_attachment"]);
+
+function isOutsideContentAttachment(entry: ProjectedRuntimeMessageEntry | undefined): boolean {
+  if (!entry) return false;
+  const source = isRuntimeAttachmentEntry(entry) ? entry.metadata.source : entry.metadata?.source;
+  return source !== undefined && OUTSIDE_CONTENT_ATTACHMENT_SOURCES.has(source);
 }
 
 interface AttachmentReorderResult {
