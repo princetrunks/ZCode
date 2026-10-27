@@ -43,6 +43,8 @@ import type { Pluggable, PluggableList } from "unified";
 import { CodeBlock, CodeBlockHeader } from "@/components/ai-elements/code-block.js";
 import { FormBlock } from "@/components/ai-elements/form-block.js";
 import { isFormLanguage } from "@/lib/formSpec.js";
+import { AudioBlock, ChartBlock, FlowBlock } from "@/components/ai-elements/rich-blocks.js";
+import { isAudioLanguage, isChartLanguage, isFlowLanguage } from "@/lib/richFences.js";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -1586,6 +1588,10 @@ export const MessageResponse = memo(
           if (!renderStreaming && isFormLanguage(language)) {
             return <FormBlock code={codeText} scope={sessionId} fallback={codeBlock} />;
           }
+          // Sando: ```chart / ```flow / ```audio (same contract as the Planner), also only once the fence is complete.
+          if (!renderStreaming && isChartLanguage(language)) return <ChartBlock code={codeText} fallback={codeBlock} />;
+          if (!renderStreaming && isFlowLanguage(language)) return <FlowBlock code={codeText} fallback={codeBlock} />;
+          if (!renderStreaming && isAudioLanguage(language)) return <AudioBlock code={codeText} fallback={codeBlock} />;
           return codeBlock;
         },
         blockquote: MarkdownBlockquote,
