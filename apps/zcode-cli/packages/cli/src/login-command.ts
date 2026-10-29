@@ -1,8 +1,13 @@
 import { formatJson } from "@zcode/core";
+import { PHONEHOME_NONE } from "@zcode/shared";
 import type { GlobalOptions, RunContext } from "@zcode/shared-types";
 import { loadBootstrapModule } from "./bootstrap-loader.js";
 import { loadCliDotenv } from "./env.js";
 import type { RunDependencies } from "./cli-types.js";
+
+// Sando phonehome=none：Z.ai / BigModel 浏览器登录不在此构建中；本地 Provider 用 provider_config.json。
+const LOGIN_REMOVED_MESSAGE =
+  "Z.ai / BigModel login is not part of this build (phonehome: none). Configure providers in ~/.zcode/v2/provider_config.json.\n";
 
 export async function runLoginCommand(
   ctx: RunContext,
@@ -11,6 +16,10 @@ export async function runLoginCommand(
   noBrowser: boolean,
   args: readonly string[] = [],
 ): Promise<number> {
+  if (PHONEHOME_NONE) {
+    ctx.stderr.write(LOGIN_REMOVED_MESSAGE);
+    return 1;
+  }
   try {
     const providerId = args[0] ?? "zai";
     if (args.length > 1 || (providerId !== "zai" && providerId !== "bigmodel")) {
@@ -88,6 +97,10 @@ export async function runLogoutCommand(
   options: GlobalOptions,
   deps: RunDependencies,
 ): Promise<number> {
+  if (PHONEHOME_NONE) {
+    ctx.stderr.write(LOGIN_REMOVED_MESSAGE);
+    return 1;
+  }
   try {
     const env = deps.env ?? process.env;
     const workingDirectory = (deps.cwd ?? process.cwd)();

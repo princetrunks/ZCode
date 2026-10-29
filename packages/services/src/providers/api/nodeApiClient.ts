@@ -2,6 +2,7 @@ import {
   ApiError,
   DEFAULT_ZCODE_ENDPOINT_ORIGIN,
   normalizeZCodeEndpointOrigin,
+  assertPhonehomeAllowed,
   rewriteZCodeEndpointUrl,
   type ApiClient,
   type ApiRequestInit,
@@ -93,6 +94,8 @@ export class NodeApiClient implements ApiClient {
     const activeEndpointOrigin = endpointOrigin ?? DEFAULT_ZCODE_ENDPOINT_ORIGIN;
     const requestInput = rewriteZCodeEndpointUrl(input, activeEndpointOrigin);
     const url = resolveUrl(requestInput);
+    // Sando phonehome=none：在 DNS / connect 之前拒绝 *.z.ai、*.bigmodel.cn（兜底，正常路径已编译掉）。
+    assertPhonehomeAllowed(url);
     const method = resolveMethod(init);
     const timeoutMs = init?.timeoutMs;
     const controller = timeoutMs && timeoutMs > 0 ? new AbortController() : null;

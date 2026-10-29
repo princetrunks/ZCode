@@ -1,5 +1,6 @@
 import {
   DEFAULT_ZCODE_ENDPOINT_ORIGIN,
+  PHONEHOME_NONE,
   ZCODE_VERSION,
   buildHelpAppConfigUrl,
   createHelpAppConfigReader,
@@ -19,6 +20,9 @@ const readHelpConfig = createHelpAppConfigReader({
 });
 
 export async function resolveWebHelpConfig(options: ResolveWebCommunityUrlOptions = {}) {
+  // Sando phonehome=none：浏览器不请求 zcode.z.ai client/configs，帮助/社区入口只用内置 config/default.json。
+  if (PHONEHOME_NONE)
+    return resolveHelpAppConfig(undefined, options.localConfig ?? localDefaultAppConfig);
   const env = import.meta.env;
   const endpoint =
     options.endpointOrigin ??

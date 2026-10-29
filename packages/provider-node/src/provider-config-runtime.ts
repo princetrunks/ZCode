@@ -3,6 +3,7 @@ import {
   type ProviderConfigLayerSnapshot,
   type ProviderConfigLayerUpdate,
 } from "@zcode/provider";
+import { PHONEHOME_NONE } from "@zcode/shared";
 import { NodeZCodeBuiltinProviderConfigSource } from "./zcode-builtin-provider-config-source.js";
 import {
   EndpointScopedZCodeBuiltinSource,
@@ -53,17 +54,20 @@ export class NodeProviderConfigRuntime {
   #checkInFlight: Promise<void> | null = null;
 
   constructor(options: NodeProviderConfigRuntimeOptions) {
-    this.#zcodeBuiltinSource = options.zcodeBuiltinEnvironment
-      ? new EndpointScopedZCodeBuiltinSource({
-          bundledFilePath: options.zcodeBuiltinFilePath,
-          ...options.zcodeBuiltinEnvironment,
-        })
-      : new NodeZCodeBuiltinProviderConfigSource({
-          bundledFilePath: options.zcodeBuiltinFilePath,
-          activeFilePath: options.zcodeBuiltinActiveFilePath,
-          watch: options.watch,
-        });
+    // Sando phonehome=none：只用随包的本地 Built-in 目录，不建远端刷新（zcode.z.ai client/configs + CDN）。
+    this.#zcodeBuiltinSource =
+      options.zcodeBuiltinEnvironment && !PHONEHOME_NONE
+        ? new EndpointScopedZCodeBuiltinSource({
+            bundledFilePath: options.zcodeBuiltinFilePath,
+            ...options.zcodeBuiltinEnvironment,
+          })
+        : new NodeZCodeBuiltinProviderConfigSource({
+            bundledFilePath: options.zcodeBuiltinFilePath,
+            activeFilePath: options.zcodeBuiltinActiveFilePath,
+            watch: options.watch,
+          });
     this.#remoteSynchronizer =
+      !PHONEHOME_NONE &&
       options.zcodeBuiltinRemote &&
       this.#zcodeBuiltinSource instanceof NodeZCodeBuiltinProviderConfigSource
         ? new ZCodeBuiltinRemoteSynchronizer({

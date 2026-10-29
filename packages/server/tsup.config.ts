@@ -6,6 +6,9 @@ import { defineConfig } from "tsup";
 const { loadBuiltinProviderConfig } = await import(
   pathToFileURL(resolve(import.meta.dirname, "../../scripts/builtin-provider-config.mjs")).href
 );
+const { sandoPhonehomeDefine } = await import(
+  pathToFileURL(resolve(import.meta.dirname, "../../scripts/sando-phonehome.mjs")).href
+);
 const { stageThirdPartyNotices } = await import(
   pathToFileURL(resolve(import.meta.dirname, "../../scripts/third-party-notices.mjs")).href
 );
@@ -21,6 +24,7 @@ export const SERVER_HTTP_DEFINES = {
   __ZCODE_VERSION__: JSON.stringify(version),
   __ZCODE_ENV__: JSON.stringify(zcodeEnv),
   __ZCODE_BUILTIN_PROVIDER_CONFIG_JSON__: JSON.stringify(zcodeBuiltinProviderConfigJson),
+  ...sandoPhonehomeDefine(),
 };
 
 function createSharedDefines() {
@@ -71,6 +75,10 @@ export default defineConfig({
   // HTTP server 场景保留为外部依赖，交给 Node 原生加载；remote 单文件 bundle 仍由 build-remote.ts 负责内联。
   external: SERVER_HTTP_EXTERNAL_DEPENDENCIES,
   define: createSharedDefines(),
+  // Sando phonehome：语法级压缩让 __SANDO_PHONEHOME__ 门控分支被删掉（不改名、不去空白）。
+  esbuildOptions(options) {
+    options.minifySyntax = true;
+  },
   // esbuild 不认识 tsconfig.json 里的 es2025，用专门的 tsconfig.build.json 消除 warning
   tsconfig: "tsconfig.build.json",
 });

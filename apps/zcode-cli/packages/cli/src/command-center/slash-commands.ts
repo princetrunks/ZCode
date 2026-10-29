@@ -1,3 +1,4 @@
+import { PHONEHOME_NONE } from "@zcode/shared";
 import type { TuiSlashCommandSuggestion } from "@zcode/tui";
 import {
   findCustomCommandHelpEntry,
@@ -87,7 +88,7 @@ export function parseSlashCommand(input: string): SlashCommand | null {
     };
   }
 
-  if (rawName === "login") {
+  if (rawName === "login" && !PHONEHOME_NONE) {
     return {
       args,
       name: "login",
@@ -96,7 +97,7 @@ export function parseSlashCommand(input: string): SlashCommand | null {
     };
   }
 
-  if (rawName === "logout") {
+  if (rawName === "logout" && !PHONEHOME_NONE) {
     return {
       args,
       name: "logout",

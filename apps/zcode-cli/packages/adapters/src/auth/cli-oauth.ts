@@ -1,7 +1,9 @@
 import { randomBytes } from "node:crypto";
 import type { HttpClientPort, HttpClientRunOptions, TraceContext } from "@zcode/contracts";
+import { DEFAULT_ZCODE_ENDPOINT_ORIGIN } from "@zcode/shared";
 
-const DEFAULT_ZCODE_OAUTH_BASE_URL = "https://zcode.z.ai/api/v1";
+// Sando phonehome=none：跟随 shared 默认 origin（本机 discard 端口），不硬编码 zcode.z.ai。
+const DEFAULT_ZCODE_OAUTH_BASE_URL = `${DEFAULT_ZCODE_ENDPOINT_ORIGIN}/api/v1`;
 export type CliOAuthProviderId = "zai" | "bigmodel";
 const POLL_TOKEN_BYTES = 32;
 const JSON_CONTENT_TYPE = "application/json";

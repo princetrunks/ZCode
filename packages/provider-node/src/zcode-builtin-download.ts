@@ -1,3 +1,4 @@
+import { PHONEHOME_NONE } from "@zcode/shared";
 import { z } from "zod";
 import { decodeZCodeBuiltinRelease, type ZCodeBuiltinRelease } from "./zcode-builtin-release.js";
 
@@ -31,8 +32,18 @@ export interface ZCodeBuiltinDownloadOptions {
   readonly signal?: AbortSignal;
 }
 
+/**
+ * Sando phonehome=none：远端目录下载整体编译掉（define 后上游实现无引用、被摇树删除）；
+ * 调用方按“无远端配置”处理，继续用随包的本地目录。
+ */
+export const downloadZCodeBuiltinRelease: (
+  options: ZCodeBuiltinDownloadOptions,
+) => Promise<ZCodeBuiltinRelease | null> = PHONEHOME_NONE
+  ? async () => null
+  : downloadZCodeBuiltinReleaseFromEndpoint;
+
 /** App/CLI 共用下载边界。总预算包含两次请求正文，不依赖 ApiClient 的响应头超时。 */
-export async function downloadZCodeBuiltinRelease(
+async function downloadZCodeBuiltinReleaseFromEndpoint(
   options: ZCodeBuiltinDownloadOptions,
 ): Promise<ZCodeBuiltinRelease | null> {
   const controller = new AbortController();

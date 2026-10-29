@@ -1,7 +1,8 @@
 import type { HttpClientPort, HttpClientRunOptions, TraceContext } from "@zcode/contracts";
-import { resolveBigModelApiOrigin } from "@zcode/shared";
+import { DEFAULT_ZAI_BUSINESS_BASE_URL, resolveBigModelApiOrigin } from "@zcode/shared";
 
-const ZAI_API_HOST = "https://api.z.ai";
+// Sando phonehome=none：跟随 shared 默认值（本机 discard 端口），不硬编码 api.z.ai。
+const ZAI_API_HOST = DEFAULT_ZAI_BUSINESS_BASE_URL;
 const JSON_CONTENT_TYPE = "application/json";
 const ZCODE_API_KEY_NAME = "zcode-api-key";
 const DEFAULT_ORG_NAME = "默认机构";

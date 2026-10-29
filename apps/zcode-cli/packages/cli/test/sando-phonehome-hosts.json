@@ -1,0 +1,161 @@
+{
+  "api.anthropic.com": [
+    "config/provider/zcode-builtin.json"
+  ],
+  "api.deepseek.com": [
+    "config/provider/zcode-builtin.json"
+  ],
+  "api.github.com": [
+    "apps/zcode-cli/packages/adapters/src/plugins/github-archive-source.ts"
+  ],
+  "api.minimaxi.com": [
+    "config/provider/zcode-builtin.json"
+  ],
+  "api.moonshot.cn": [
+    "config/provider/zcode-builtin.json"
+  ],
+  "api.openai.com": [
+    "config/provider/zcode-builtin.json"
+  ],
+  "api.x.ai": [
+    "config/provider/zcode-builtin.json"
+  ],
+  "api.xiaomimimo.com": [
+    "config/provider/zcode-builtin.json"
+  ],
+  "api.z.ai": [
+    "apps/zcode-cli/packages/adapters/src/model/official-coding-plan-gateway.ts",
+    "config/provider/zcode-builtin.json",
+    "packages/desktop/src/main/desktopMainIpcRemote.ts",
+    "packages/desktop/src/main/desktopWindowChrome.ts",
+    "packages/services/src/oauth/providers/zaiProviderAdapter.ts",
+    "packages/services/src/oauth/providers/zaiProviderConfig.ts",
+    "packages/shared/src/zcodeEndpoint.ts"
+  ],
+  "avatars.githubusercontent.com": [
+    "packages/ui/src/assets/provider-icons/model-provider-logo-sources.json"
+  ],
+  "bailian.console.aliyun.com": [
+    "config/provider/zcode-builtin.json"
+  ],
+  "bigmodel.cn": [
+    "config/provider/zcode-builtin.json",
+    "packages/services/src/oauth/providers/bigmodelProviderConfig.ts",
+    "packages/shared/src/zcodeEndpoint.ts"
+  ],
+  "cdn-zcode.z.ai": [
+    "apps/zcode-cli/packages/bootstrap/src/app/official-plugin-definitions.ts",
+    "packages/desktop/src/main/remoteCdn.ts",
+    "packages/shared/src/plugin-marketplaces.ts",
+    "packages/ui/src/v4/featureSuggestedPrompts.ts"
+  ],
+  "cdn.npmmirror.com": [
+    "packages/zcode-server-cli/src/packaging/nodeDistMirror.ts"
+  ],
+  "cdn.prod.website-files.com": [
+    "packages/ui/src/assets/provider-icons/model-provider-logo-sources.json"
+  ],
+  "chat.z.ai": [
+    "packages/services/src/oauth/providers/zaiProviderConfig.ts",
+    "packages/shared/src/zcodeEndpoint.ts"
+  ],
+  "console.anthropic.com": [
+    "config/provider/zcode-builtin.json"
+  ],
+  "console.x.ai": [
+    "config/provider/zcode-builtin.json"
+  ],
+  "dashscope-intl.aliyuncs.com": [
+    "config/provider/zcode-builtin.json"
+  ],
+  "dashscope.aliyuncs.com": [
+    "config/provider/zcode-builtin.json"
+  ],
+  "ejiidnob33g9ap1r.public.blob.vercel-storage.com": [
+    "packages/ui/src/components/ai-elements/persona.tsx"
+  ],
+  "en.wikipedia.org": [
+    "packages/rpc/src/serialization.ts"
+  ],
+  "file.cdn.minimax.io": [
+    "packages/ui/src/assets/provider-icons/model-provider-logo-sources.json"
+  ],
+  "github.com": [
+    "apps/zcode-cli/packages/adapters/src/plugins/marketplace.ts",
+    "config/default.json",
+    "packages/ui/src/assets/provider-icons/model-provider-logo-sources.json"
+  ],
+  "images.ctfassets.net": [
+    "packages/ui/src/assets/provider-icons/model-provider-logo-sources.json"
+  ],
+  "json-schema.org": [
+    "apps/zcode-cli/packages/contracts/src/tools/json-schema.ts",
+    "apps/zcode-cli/packages/core/src/tool/handlers/agent.ts",
+    "apps/zcode-cli/packages/core/src/tool/handlers/respond-to-coordinator.ts",
+    "apps/zcode-cli/packages/core/src/tool/handlers/send-message.ts"
+  ],
+  "modelstudio.console.aliyun.com": [
+    "config/provider/zcode-builtin.json"
+  ],
+  "nodejs.org": [
+    "packages/zcode-server-cli/src/packaging/nodeDistMirror.ts"
+  ],
+  "open.bigmodel.cn": [
+    "apps/zcode-cli/packages/adapters/src/model/official-coding-plan-gateway.ts",
+    "config/provider/zcode-builtin.json",
+    "packages/services/src/model-provider/legacyZCodeConfigProviderReader.ts"
+  ],
+  "opencode.ai": [
+    "config/provider/zcode-builtin.json",
+    "packages/ui/src/assets/provider-icons/model-provider-logo-sources.json"
+  ],
+  "openrouter.ai": [
+    "config/provider/zcode-builtin.json",
+    "packages/ui/src/assets/provider-icons/model-provider-logo-sources.json"
+  ],
+  "platform.deepseek.com": [
+    "config/provider/zcode-builtin.json"
+  ],
+  "platform.kimi.com": [
+    "config/provider/zcode-builtin.json"
+  ],
+  "platform.minimaxi.com": [
+    "config/provider/zcode-builtin.json"
+  ],
+  "platform.openai.com": [
+    "config/provider/zcode-builtin.json"
+  ],
+  "platform.xiaomimimo.com": [
+    "config/provider/zcode-builtin.json",
+    "packages/ui/src/assets/provider-icons/model-provider-logo-sources.json"
+  ],
+  "projects.shrinetech.io": [
+    "config/default.json",
+    "packages/ui/src/lib/audioSpec.ts"
+  ],
+  "raw.githubusercontent.com": [
+    "packages/ui/src/assets/provider-icons/model-provider-logo-sources.json"
+  ],
+  "www.apple.com": [
+    "packages/desktop/src/main/desktopFinderOpenFolderWorkflow.ts"
+  ],
+  "z.ai": [
+    "apps/zcode-cli/packages/bootstrap/src/app/official-plugin-definitions.ts",
+    "config/provider/zcode-builtin.json",
+    "packages/shared/src/model-provider-family.ts",
+    "packages/ui/src/settings/model-provider-section/constants.ts"
+  ],
+  "zcode.ai": [
+    "apps/zcode-cli/packages/core/src/tool/handlers/webfetch-constants.ts"
+  ],
+  "zcode.z.ai": [
+    "apps/zcode-cli/packages/adapters/src/model/official-coding-plan-gateway.ts",
+    "config/provider/zcode-builtin.json",
+    "packages/services/src/conversation-share/conversationShareService.ts",
+    "packages/services/src/oauth/providers/bigmodelProviderConfig.ts",
+    "packages/services/src/oauth/providers/zaiProviderConfig.ts",
+    "packages/shared/src/zcodeEndpoint.ts",
+    "packages/ui/src/lib/productDocs.ts",
+    "packages/web/src/share/ConversationShareLandingPage.tsx"
+  ]
+}

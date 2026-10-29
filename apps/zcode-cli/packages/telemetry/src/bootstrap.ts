@@ -72,7 +72,14 @@ export interface PrepareModelTelemetryOptions {
   runtimeSurface?: ModelApiRuntimeSurface;
 }
 
+// Sando phonehome=none（同 @zcode/shared 的 PHONEHOME_NONE；本包不依赖 shared，故在此镜像）：
+// 不解析任何 OTLP 端点，Trace/Metric Exporter 与 SDK 都不会加载，OTEL_EXPORTER_OTLP_* 被忽略。
+declare const __SANDO_PHONEHOME__: string | undefined;
+const PHONEHOME_NONE: boolean =
+  typeof __SANDO_PHONEHOME__ === "undefined" || __SANDO_PHONEHOME__ !== "upstream";
+
 export function resolveOtlpTraceEndpoint(env: EnvRecord): string | undefined {
+  if (PHONEHOME_NONE) return undefined;
   const traceEndpoint = env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT?.trim();
   if (traceEndpoint) return validHttpUrl(traceEndpoint);
   const commonEndpoint = env.OTEL_EXPORTER_OTLP_ENDPOINT?.trim();
@@ -85,6 +92,7 @@ export function resolveOtlpTraceEndpoint(env: EnvRecord): string | undefined {
 }
 
 export function resolveOtlpMetricEndpoint(env: EnvRecord): string | undefined {
+  if (PHONEHOME_NONE) return undefined;
   const metricEndpoint = env.OTEL_EXPORTER_OTLP_METRICS_ENDPOINT?.trim();
   if (metricEndpoint) return validHttpUrl(metricEndpoint);
   const commonEndpoint = env.OTEL_EXPORTER_OTLP_ENDPOINT?.trim();

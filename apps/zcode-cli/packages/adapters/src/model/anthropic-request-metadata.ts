@@ -1,3 +1,4 @@
+import { PHONEHOME_NONE } from "@zcode/shared";
 import { ensureCliDeviceMid } from "../device/cli-device-mid.js";
 import type { EnvRecord } from "./model-execution.js";
 import { normalizeModelSessionIdForAttribution, type ModelStatusContext } from "./runner-status.js";
@@ -20,7 +21,8 @@ export async function resolveAnthropicRequestMetadataUserId(input: {
   providerKind: string | undefined;
   sessionId?: ModelStatusContext["sessionId"];
 }): Promise<string | undefined> {
-  if (input.providerKind !== "anthropic") {
+  // Sando phonehome=none：不向模型服务商发送设备身份（metadata.user_id.device_id）。
+  if (PHONEHOME_NONE || input.providerKind !== "anthropic") {
     return undefined;
   }
 

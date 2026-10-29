@@ -2,6 +2,7 @@ import {
   buildZCodeEndpointUrls,
   clientConfigReadOptionsSchema,
   parseClientConfigSnapshot,
+  PHONEHOME_NONE,
   type ApiClient,
   type ClientConfigSnapshot,
 } from "@zcode/shared";
@@ -64,6 +65,8 @@ export function createClientConfigService(dependencies: {
 
   return {
     async getSnapshot(options = {}) {
+      // Sando phonehome=none：不请求 zcode.z.ai client/configs，返回空的公开配置（默认插件排序）。
+      if (PHONEHOME_NONE) return parseClientConfigSnapshot({ code: 0, data: { configs: {} } });
       const { forceRefresh } = clientConfigReadOptionsSchema.parse(options);
       const context = await dependencies.resolveRequestContext();
       const url = new URL(

@@ -3,6 +3,7 @@ import type { ISettingService } from "@zcode/services";
 import {
   DEFAULT_LOCALE,
   DEFAULT_ZCODE_ENDPOINT_ORIGIN,
+  PHONEHOME_NONE,
   desktopMenuMessageIds,
   formatDesktopMenuMessage,
   getDesktopMenuMessage,
@@ -1460,7 +1461,8 @@ export async function acknowledgePostUpdateReleaseNotes(
 }
 
 export async function initAutoUpdater(options: InitAutoUpdaterOptions = {}): Promise<void> {
-  if (options.enabled === false) {
+  // Sando phonehome=none：不检查更新（zcode.z.ai manifest / 小时轮询），等同产品形态禁用。
+  if (options.enabled === false || PHONEHOME_NONE) {
     autoUpdaterDisabledForProductFlavor = true;
     if (autoUpdatePollTimer) {
       clearInterval(autoUpdatePollTimer);

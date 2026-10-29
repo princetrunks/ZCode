@@ -1,9 +1,21 @@
 import type { ZCodeEnv } from "./env.js";
+import { PHONEHOME_DISABLED_ORIGIN, PHONEHOME_NONE } from "./phonehome.js";
 
-export const DEFAULT_ZCODE_ENDPOINT_ORIGIN = "https://zcode.z.ai";
-export const DEFAULT_BIGMODEL_API_ORIGIN = "https://bigmodel.cn";
-export const DEFAULT_ZAI_OAUTH_ORIGIN = "https://chat.z.ai";
-export const DEFAULT_ZAI_BUSINESS_BASE_URL = "https://api.z.ai";
+// Sando phonehome=none：厂商默认地址全部指向本机 discard 端口，未显式配置时不会解析或连接外部主机。
+// UPSTREAM_ZCODE_ENDPOINT_ORIGIN 只用于识别/改写上游硬编码的 URL，不作为请求目标。
+export const UPSTREAM_ZCODE_ENDPOINT_ORIGIN = "https://zcode.z.ai";
+export const DEFAULT_ZCODE_ENDPOINT_ORIGIN = PHONEHOME_NONE
+  ? PHONEHOME_DISABLED_ORIGIN
+  : UPSTREAM_ZCODE_ENDPOINT_ORIGIN;
+export const DEFAULT_BIGMODEL_API_ORIGIN = PHONEHOME_NONE
+  ? PHONEHOME_DISABLED_ORIGIN
+  : "https://bigmodel.cn";
+export const DEFAULT_ZAI_OAUTH_ORIGIN = PHONEHOME_NONE
+  ? PHONEHOME_DISABLED_ORIGIN
+  : "https://chat.z.ai";
+export const DEFAULT_ZAI_BUSINESS_BASE_URL = PHONEHOME_NONE
+  ? PHONEHOME_DISABLED_ORIGIN
+  : "https://api.z.ai";
 export const DEFAULT_ZAI_OAUTH_CLIENT_ID = "client_P8X5CMWmlaRO9gyO-KSqtg";
 
 // 构建仅注入公开链接；Node 调用方仍可显式传 env，避免读取另一进程的配置。
@@ -278,7 +290,8 @@ export function rewriteZCodeEndpointUrl(input: string | URL, endpointOrigin: str
   } catch {
     return input;
   }
-  const sourceOrigin = DEFAULT_ZCODE_ENDPOINT_ORIGIN;
+  // phonehome=none 时默认 origin 已是本机地址；仍需把上游硬编码的 zcode.z.ai URL 改写走。
+  const sourceOrigin = UPSTREAM_ZCODE_ENDPOINT_ORIGIN;
   if (parsed.origin !== sourceOrigin) {
     return input;
   }

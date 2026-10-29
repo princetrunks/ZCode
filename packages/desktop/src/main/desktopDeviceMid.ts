@@ -1,7 +1,7 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
-import { createUuid } from "@zcode/shared";
+import { createUuid, PHONEHOME_NONE } from "@zcode/shared";
 import { getAppConfigDir } from "@zcode/services/node";
 
 interface EnsureDesktopDeviceMidSyncOptions {
@@ -28,6 +28,8 @@ interface EnsureDesktopDeviceMidSyncOptions {
  * 保证窗口创建那一刻 deviceMid 一定有值。
  */
 export function ensureDesktopDeviceMidSync(options?: EnsureDesktopDeviceMidSyncOptions): string {
+  // Sando phonehome=none：不生成、不落盘设备身份（telemetry-state.json）。
+  if (PHONEHOME_NONE) return "";
   const createId = options?.createId ?? createUuid;
   try {
     const configDir = options?.configDir ?? getAppConfigDir();

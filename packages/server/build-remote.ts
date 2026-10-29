@@ -3,6 +3,7 @@ import { build, type Plugin } from "esbuild";
 import { validateRemoteServerBundle } from "./buildRemoteValidation.js";
 import { loadBuiltinProviderConfig } from "../../scripts/builtin-provider-config.mjs";
 import { stageThirdPartyNotices } from "../../scripts/third-party-notices.mjs";
+import { sandoPhonehomeDefine } from "../../scripts/sando-phonehome.mjs";
 
 const { version } = JSON.parse(readFileSync("../../package.json", "utf-8"));
 const { content: zcodeBuiltinProviderConfigJson } = await loadBuiltinProviderConfig();
@@ -45,7 +46,10 @@ const buildResult = await build({
     "import.meta.dirname": "__import_meta_dirname",
     __ZCODE_VERSION__: JSON.stringify(version),
     __ZCODE_BUILTIN_PROVIDER_CONFIG_JSON__: JSON.stringify(zcodeBuiltinProviderConfigJson),
+    ...sandoPhonehomeDefine(),
   },
+  // Sando phonehome：语法级压缩删掉门控分支。
+  minifySyntax: true,
   metafile: true,
 });
 

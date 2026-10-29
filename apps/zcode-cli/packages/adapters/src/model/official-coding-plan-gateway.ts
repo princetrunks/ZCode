@@ -1,4 +1,4 @@
-import { resolveRuntimeZCodeEndpointOrigin } from "@zcode/shared";
+import { PHONEHOME_NONE, resolveRuntimeZCodeEndpointOrigin } from "@zcode/shared";
 import type { EnvRecord } from "./model-execution.js";
 
 /**
@@ -54,6 +54,8 @@ export function resolveOfficialCodingPlanGatewayUrl(
   requestUrl: string,
   env: EnvRecord = process.env,
 ): OfficialCodingPlanGatewayDecision {
+  // Sando phonehome=none：模型请求不被暗中改道到 zcode.z.ai 网关。
+  if (PHONEHOME_NONE) return { viaGateway: false, url: requestUrl };
   const parsed = parseHttpsUrl(requestUrl);
   if (!parsed) {
     return { viaGateway: false, url: requestUrl };

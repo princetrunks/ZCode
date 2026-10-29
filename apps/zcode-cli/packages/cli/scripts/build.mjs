@@ -4,6 +4,7 @@ import { basename, dirname, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { build } from "esbuild";
 import { stageBuiltinProviderConfig } from "../../../../../scripts/builtin-provider-config.mjs";
+import { sandoPhonehomeDefine } from "../../../../../scripts/sando-phonehome.mjs";
 
 const cliRoot = resolve(import.meta.dirname, "..");
 const projectRoot = resolve(cliRoot, "../..");
@@ -231,6 +232,7 @@ export const buildCli = async ({
     bundle: true,
     define: {
       __CLI_VERSION__: JSON.stringify(cliVersion),
+      ...sandoPhonehomeDefine(env),
     },
     entryPoints: [resolve(cliDirectory, "src/main.ts")],
     // Ink 7 and yoga-layout use top-level await, so the CJS CLI bundle loads the TUI
@@ -249,6 +251,8 @@ export const buildCli = async ({
     legalComments: "none",
     logLevel: "info",
     minify,
+    // Sando phonehome：只做语法级压缩（不改名、不去空白），让跨模块内联的 __SANDO_PHONEHOME__ 门控分支被删掉。
+    minifySyntax: true,
     metafile: true,
     plugins: [createZodDedupePlugin({ expectedV4Version: await readZodBuildVersion() })],
     outfile,

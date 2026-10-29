@@ -2,6 +2,7 @@
 import {
   createUuid,
   ZCODE_VERSION,
+  PHONEHOME_NONE,
   ZCODE_ENV,
   ZCODE_TELEMETRY_ENABLED,
   ZCODE_TELEMETRY_REPORT_ENDPOINT,
@@ -324,6 +325,8 @@ export function createTelemetryCore(dependencies: TelemetryCoreDependencies = {}
     headers: Record<string, string>,
     userId: string,
   ): Promise<void> {
+    // Sando phonehome=none：数仓埋点上报整体编译掉。
+    if (PHONEHOME_NONE) return;
     let authorization: string | null = null;
     try {
       authorization = (await dependencies.loadAuthorization?.(userId)) ?? null;

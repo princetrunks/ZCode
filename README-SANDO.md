@@ -24,6 +24,31 @@ mise exec -- pnpm --filter "@zcode/cli..." build
 node apps/zcode-cli/packages/cli/dist/zcode.cjs --help   # or the ~/bin/sando wrapper
 ```
 
+## No phone-home (`phonehome: none`, 2026-10-29)
+
+The fork builds with one switch, `phonehome` (`packages/shared/src/phonehome.ts`; build side
+`scripts/sando-phonehome.mjs`). The default, `none`, removes every vendor call-home path from the CLI, server and web:
+
+- the zcode.z.ai remote Built-in catalogue (`/api/v1/client/configs` + the CDN JSON) and its hourly refresh. The
+  local catalogue `config/provider/zcode-builtin.json` is staged without the Z.ai / BigModel account providers and
+  templates, and any cached remote catalogue is overwritten by it;
+- client-config, client-scenes and help-config fetches (server and browser), the plugin-store auto-refresh from
+  cdn-zcode.z.ai and the CDN plugin icons;
+- the device ID (`telemetry-state.json`, `X-Device-Mid`, Anthropic `metadata.user_id.device_id`);
+- OTEL exporters (the `OTEL_EXPORTER_OTLP_*` vars are ignored), data-warehouse and ARMS telemetry;
+- update checks (desktop auto-updater);
+- Z.ai / BigModel login (`sando login|logout`, `/login`, the OAuth buttons in every UI) and the hidden reroute of
+  api.z.ai / open.bigmodel.cn model calls through the zcode.z.ai gateway. Vendor default origins become
+  `http://127.0.0.1:9`.
+
+As a second layer, the CLI and services HTTP clients refuse `*.z.ai` / `*.bigmodel.cn` before any DNS lookup.
+Bundlers fold the switch to a constant (`__SANDO_PHONEHOME__` define + `minifySyntax`), so the gated paths are
+unreachable. Some dead function bodies stay in the bundle because esbuild does not tree-shake lazily initialised
+modules. `SANDO_PHONEHOME=upstream pnpm build:zcode` restores upstream behaviour.
+Guard: `apps/zcode-cli/packages/cli/test/sando-phonehome.test.mjs`. It checks loopback-only defaults and the gated
+functions, and keeps a reviewed allowlist of hard-coded external URL literals (`sando-phonehome-hosts.json`), so any
+new external host in shipped source fails the test.
+
 ## Local model provider
 
 Providers live in `~/.zcode/v2/provider_config.json` (schemaVersion 1): a personal provider rule with

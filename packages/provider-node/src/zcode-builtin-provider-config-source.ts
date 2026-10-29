@@ -1,3 +1,4 @@
+import { PHONEHOME_NONE } from "@zcode/shared";
 import { watch, type FSWatcher } from "node:fs";
 import { createHash } from "node:crypto";
 import { mkdir, readFile } from "node:fs/promises";
@@ -100,7 +101,8 @@ export class NodeZCodeBuiltinProviderConfigSource implements ProviderSource<Prov
   async #readAndMaterializeLocked(): Promise<ZCodeBuiltinRelease> {
     const [bundled, active] = await Promise.all([
       readReleaseCandidate(this.#bundledFilePath),
-      this.#activeFilePath === this.#bundledFilePath
+      // Sando phonehome=none：忽略之前从远端缓存下来的 Active，随包目录覆盖它。
+      this.#activeFilePath === this.#bundledFilePath || PHONEHOME_NONE
         ? Promise.resolve(null)
         : readReleaseCandidate(this.#activeFilePath),
     ]);

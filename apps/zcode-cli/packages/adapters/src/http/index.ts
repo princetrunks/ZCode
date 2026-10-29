@@ -5,6 +5,7 @@
 import http from "node:http";
 import https from "node:https";
 import { Readable } from "node:stream";
+import { assertPhonehomeAllowed } from "@zcode/shared";
 import { ProxyAgent } from "proxy-agent";
 import {
   createHttpClientError,
@@ -164,6 +165,8 @@ function fetchHttpResponse(
   tlsCaCertificates: Buffer | undefined,
   publicDnsLookup: DnsLookup | undefined,
 ): Promise<Response> {
+  // Sando phonehome=none：在 DNS / connect 之前拒绝 *.z.ai、*.bigmodel.cn（兜底，正常路径已编译掉）。
+  assertPhonehomeAllowed(url);
   const useCustomTlsAgent = url.protocol === "https:" && tlsCaCertificates !== undefined;
   if (!proxyUrl && !useCustomTlsAgent && !publicDnsLookup) {
     return fetch(url.toString(), {

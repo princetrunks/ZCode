@@ -1,4 +1,5 @@
 import { loadEndpointEnv } from "./load-endpoint-env.mjs";
+import { resolveSandoPhonehome, stripVendorBuiltinProviders } from "./sando-phonehome.mjs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { parseEnv } from "node:util";
@@ -48,7 +49,10 @@ export async function loadBuiltinProviderConfig({ root = repositoryRoot, env = p
     env.ZCODE_BUILTIN_PROVIDER_CONFIG_FILE?.trim() || "config/provider/zcode-builtin.json",
   );
   try {
-    const content = await readFile(sourcePath, "utf8");
+    const source = await readFile(sourcePath, "utf8");
+    // Sando phonehome=none：随包目录去掉 Z.ai/BigModel 账号登录与模板（CLI 暂存与 server 内嵌共用此处）。
+    const content =
+      resolveSandoPhonehome(env) === "none" ? stripVendorBuiltinProviders(source) : source;
     // 构建期复用运行时的完整 Release 校验，避免打包成功后才发现 Schema 不兼容。
     // tsx 仅供构建工具加载仓库 TS，不进入产品 bundle，也不复制一份校验规则。
     // Windows 绝对路径的盘符会被 ESM 当作协议，转为 file URL 后各平台共用同一加载入口。

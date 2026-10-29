@@ -5,6 +5,7 @@ import {
   formatLogPrefix,
   type ApiClient,
   BIGMODEL_PROVIDER_ID,
+  PHONEHOME_NONE,
   ZAI_PROVIDER_ID,
   type OAuthCallbackResult,
   type OAuthCachedSessionRestoreResult,
@@ -144,11 +145,14 @@ export class OAuthService implements IOAuthService {
     this.apiClient = dependencies.apiClient;
     this.env = dependencies.env ?? process.env;
 
+    // Sando phonehome=none：不注册 Z.ai / BigModel OAuth 适配器，所有界面都不再出现登录入口。
     const adapters =
       dependencies.adapters ??
-      createOAuthProviderAdapters(createOAuthRuntimeConfig(dependencies.env), {
-        apiClient: dependencies.apiClient,
-      });
+      (PHONEHOME_NONE
+        ? []
+        : createOAuthProviderAdapters(createOAuthRuntimeConfig(dependencies.env), {
+            apiClient: dependencies.apiClient,
+          }));
 
     for (const adapter of adapters) {
       this.adapters.set(adapter.providerId, adapter);

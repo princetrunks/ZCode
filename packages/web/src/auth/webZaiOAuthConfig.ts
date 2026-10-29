@@ -1,6 +1,7 @@
 import type { WebZaiOAuthProviderConfig } from "./zaiWebOAuthProvider.js";
 import {
   buildZCodeEndpointUrls,
+  DEFAULT_ZAI_OAUTH_ORIGIN,
   DEFAULT_ZCODE_ENDPOINT_ORIGIN,
   resolveBigModelApiOrigin,
 } from "@zcode/shared";
@@ -27,7 +28,7 @@ function normalizeZaiOAuthOrigin(value: string): string {
 }
 
 function buildZaiOAuthAuthorizeUrl(origin: string | undefined): string {
-  return `${normalizeZaiOAuthOrigin(origin?.trim() || "https://chat.z.ai")}/api/oauth/authorize`;
+  return `${normalizeZaiOAuthOrigin(origin?.trim() || DEFAULT_ZAI_OAUTH_ORIGIN)}/api/oauth/authorize`;
 }
 
 /**

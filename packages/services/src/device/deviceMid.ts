@@ -1,4 +1,4 @@
-import { createUuid } from "@zcode/shared";
+import { createUuid, PHONEHOME_NONE } from "@zcode/shared";
 import { mkdir, open, readFile, stat, unlink, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { getAppConfigDir } from "../paths.js";
@@ -193,6 +193,8 @@ export async function ensureDeviceMidInLockedState(
  * 与同机 CLI/Desktop 共享同一个文件、字段与锁。
  */
 export function ensureDeviceMid(options: EnsureDeviceMidOptions = {}): Promise<string> {
+  // Sando phonehome=none：不生成、不落盘设备身份（telemetry-state.json），调用方据空值省略 X-Device-Mid。
+  if (PHONEHOME_NONE) return Promise.resolve("");
   const deviceStateFile = resolveDeviceStateFile(options.homeDir);
   const cached = deviceMidCacheByStateFile.get(deviceStateFile);
   if (cached) {

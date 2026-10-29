@@ -1,3 +1,4 @@
+import { PHONEHOME_NONE } from "./phonehome.js";
 export const ZCODE_RUNTIME_ENV_KEY = "ZCODE_RUNTIME_ENV";
 export const ZCODE_HTTP_PROXY_ENV_KEY = "ZCODE_HTTP_PROXY";
 export const ZCODE_NO_PROXY_ENV_KEY = "ZCODE_NO_PROXY";
@@ -185,6 +186,8 @@ export function readZCodeAgentTelemetryEnv(
 }
 
 export function getCapturedZCodeAgentTelemetryEnv(): Record<string, string> {
+  // Sando phonehome=none：不向 Agent 透传 OTEL_EXPORTER_OTLP_*。
+  if (PHONEHOME_NONE) return {};
   return { ...capturedZCodeAgentTelemetryEnv };
 }
 

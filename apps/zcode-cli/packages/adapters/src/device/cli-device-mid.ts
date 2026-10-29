@@ -1,7 +1,7 @@
 import { mkdir, open, readFile, rename, stat, unlink, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
-import { createUuid } from "@zcode/shared";
+import { createUuid, PHONEHOME_NONE } from "@zcode/shared";
 
 const LOCK_RETRY_DELAY_MS = 10;
 const LOCK_RETRY_COUNT = 200;
@@ -32,6 +32,8 @@ const deviceMidCacheByStateFile = new Map<string, Promise<string>>();
  * 文件系统异常不阻断模型请求；同一进程会继续使用首次生成的 fallback UUID。
  */
 export function ensureCliDeviceMid(options: EnsureCliDeviceMidOptions = {}): Promise<string> {
+  // Sando phonehome=none：不生成、不落盘设备身份（telemetry-state.json）。
+  if (PHONEHOME_NONE) return Promise.resolve("");
   const stateFile = resolveCliTelemetryStateFile(options);
   const cached = deviceMidCacheByStateFile.get(stateFile);
   if (cached) {
