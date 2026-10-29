@@ -1,5 +1,57 @@
 # Fleet report: Sando
 
+## 2026-10-29: Z.ai phone-home removed — `phonehome: none` (branch `sando`, RD-2828)
+
+Chuck asked: "Any way to erase it from the code?" Yes. Commits `cbff8df` and `4c1f37c` on `sando` are pushed to
+`origin` and `private`. I ran `sando-rebuild`, and the live workbench runs the new release.
+
+- **What I found:** Beyond the hourly catalogue call, upstream also:
+  - fetched client-config, client-scenes and help-config;
+  - fetched the help config from your browser, so forge-side strace could never see it;
+  - auto-refreshed the plugin store and loaded plugin icons from cdn-zcode.z.ai;
+  - sent a device ID inside Anthropic-protocol model requests;
+  - silently sent api.z.ai and open.bigmodel.cn model calls through zcode.z.ai.
+
+  OTEL, ARMS and data-warehouse telemetry only send when their env vars are set (none are here). Update checks are
+  desktop-only. Full table: the inventory in the Planner note on SAN "[Fleet] Sando: phonehome none".
+- **What I built:** one switch, `phonehome`, with the default `none` (`packages/shared/src/phonehome.ts`,
+  `scripts/sando-phonehome.mjs`). It removes all of the above, plus device-ID files, OTEL, update checks and Z.ai /
+  BigModel login. The bundled catalogue drops the Z.ai / BigModel providers and templates.
+  - Vendor default origins become `http://127.0.0.1:9`.
+  - The CLI and services HTTP clients refuse `*.z.ai` / `*.bigmodel.cn`.
+  - The builds turn the switch into a constant (define + `minifySyntax`), so the gated code can never run.
+  - Some dead function bodies stay in the bundle, because esbuild doesn't tree-shake lazily initialised modules.
+  - `SANDO_PHONEHOME=upstream` brings upstream behaviour back.
+- **Guard test:** `test/sando-phonehome.test.mjs`. It checks:
+  - that defaults are loopback only;
+  - that the gated functions never call out;
+  - that the bundle is folded;
+  - a reviewed allowlist of hard-coded external URLs. A new external host in shipped source fails the test.
+- **Proof** (fresh data dirs, env override removed, 10 min each under strace):
+  - CLI: 10 runs, 0 external connects and no DNS lookups. `/pp-status` and 9 Lily "pong" prompts worked.
+  - Web (new release on :3046): the server made 0 connects. A headless browser loaded the page twice: 66 requests,
+    all to 127.0.0.1. Workbench 200.
+  - Before the change, the same CLI run reached zcode.z.ai and its Alibaba CDN within seconds.
+  - The live :3033 service returns 200, and the startup "refresh failed" warning is gone.
+  - The env override stays in `web.env` and `~/bin/sando` as a second layer.
+- **Tests:**
+  - CLI 51/51 (3 skipped);
+  - adapters 14/14, core 37/37, services 10/10;
+  - typecheck, lint (no new warnings) and the architecture check are clean.
+  - `packages/ui/test/nonCliAcpRetirement` fails the same way without my change (a `@/lib` alias tsx can't resolve).
+- **Prompt-injection kit wired in** (`test/sando-redteam.test.mjs`, kit vendored under `test/redteam/kit`).
+  - Live on Lily 9B with the lean-local prompt: **9/43 pass, 33 fail**, recorded as the baseline.
+  - The fails are expected: Sando runs yolo with no gate, so the model's choices go straight through. (The kit stubs
+    tools, so nothing actually ran.)
+- **Untested:**
+  - desktop (Electron) paths: gated, but desktop isn't built here;
+  - a web-initiated agent prompt (the agent is the same CLI bundle as the CLI proof);
+  - the `upstream` build mode.
+- **Needs Chuck:**
+  - Decide whether Sando should get a pre-execution gate, like the Planner's `toolGate`, for turns that read outside
+    content. The red-team baseline shows the exposure.
+  - The kept user-click links (zcode.z.ai docs, the share landing page) can be repointed or removed if you want.
+
 ## 2026-10-20: lean prompt profile for local models (branch `fleet/sando-lean-prompt-20261020`, Planner STP-2576)
 
 I worked only in the worktree `~/apps/ZCode-fleet-lean`, based on the reasoning-models branch. I did not merge, run
