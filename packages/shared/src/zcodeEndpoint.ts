@@ -1,5 +1,13 @@
 import type { ZCodeEnv } from "./env.js";
-import { PHONEHOME_DISABLED_ORIGIN, PHONEHOME_NONE } from "./phonehome.js";
+
+// Sando build switch `phonehome`（RD-2828）。定义放在这里而不是 phonehome.ts：vite/tsup 配置在 Node
+// 加载期直接导入本文件，本文件不能有运行时相对导入。phonehome.ts 转导出并补充其余工具。
+declare const __SANDO_PHONEHOME__: string | undefined;
+// 单个布尔表达式：esbuild 在 define 后能跨模块内联并折叠被门控的分支。
+export const PHONEHOME_NONE: boolean =
+  typeof __SANDO_PHONEHOME__ === "undefined" || __SANDO_PHONEHOME__ !== "upstream";
+/** phonehome=none 时厂商地址的替身：本机 discard 端口，只会被本地拒绝，不会解析域名或出网。 */
+export const PHONEHOME_DISABLED_ORIGIN = "http://127.0.0.1:9";
 
 // Sando phonehome=none：厂商默认地址全部指向本机 discard 端口，未显式配置时不会解析或连接外部主机。
 // UPSTREAM_ZCODE_ENDPOINT_ORIGIN 只用于识别/改写上游硬编码的 URL，不作为请求目标。

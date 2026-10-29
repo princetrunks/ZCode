@@ -1,27 +1,19 @@
 /**
  * Sando build switch `phonehome` (RD-2828, 2026-10-29).
  *
- * "none" (the fork default) compiles out every vendor call-home path: the zcode.z.ai remote
- * Built-in catalogue / client-config fetch, the device ID (telemetry-state.json), OTEL exporters,
- * update checks, and the Z.ai / BigModel login + endpoint defaults. Bundlers replace
- * `__SANDO_PHONEHOME__` (CLI esbuild, web/server builds) so the gated branches are dropped;
- * unbundled code (tsc, tests) falls back to "none" as well. Build with `SANDO_PHONEHOME=upstream`
- * only to reproduce upstream behaviour.
+ * "none" (the fork default) removes every vendor call-home path: the zcode.z.ai remote Built-in
+ * catalogue / client-config fetches, the device ID (telemetry-state.json), OTEL exporters, update
+ * checks, and the Z.ai / BigModel login + endpoint defaults. Bundlers replace `__SANDO_PHONEHOME__`
+ * (CLI esbuild, server/web builds), so every gate is a build-time constant and the gated paths are
+ * unreachable; unbundled code (tsc, tests) falls back to "none" as well. Build with
+ * `SANDO_PHONEHOME=upstream` only to reproduce upstream behaviour.
  */
-declare const __SANDO_PHONEHOME__: string | undefined;
+import { PHONEHOME_DISABLED_ORIGIN, PHONEHOME_NONE } from "./zcodeEndpoint.js";
 
-// 单个布尔表达式：esbuild 在 define 后能跨模块内联并删掉被门控的分支。
-export const PHONEHOME_NONE: boolean =
-  typeof __SANDO_PHONEHOME__ === "undefined" || __SANDO_PHONEHOME__ !== "upstream";
+// The switch itself lives in zcodeEndpoint.ts (Node loads that file directly from vite/tsup configs).
+export { PHONEHOME_DISABLED_ORIGIN, PHONEHOME_NONE };
 
 export const SANDO_PHONEHOME: "none" | "upstream" = PHONEHOME_NONE ? "none" : "upstream";
-
-/**
- * Stand-in origin for vendor endpoints when phonehome is "none": the discard port on loopback.
- * Anything that still builds a vendor URL from the defaults gets a refused local connection,
- * never a DNS lookup or an external packet.
- */
-export const PHONEHOME_DISABLED_ORIGIN = "http://127.0.0.1:9";
 
 /** Vendor hosts that phonehome=none never contacts (keep in sync with scripts/sando-phonehome.mjs). */
 export const PHONEHOME_VENDOR_HOST_SUFFIXES: readonly string[] = ["z.ai", "bigmodel.cn"];
