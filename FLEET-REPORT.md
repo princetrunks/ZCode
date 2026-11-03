@@ -1,5 +1,45 @@
 # Fleet report: Sando
 
+## 2026-11-03: Board side pane — the Planner status board inside the Sando workbench (deployed, `1b809e4`)
+
+Chuck asked for Sando to have the status board too. It is live on sando-web. The branch is `fleet/sando-board-20261103`
+(`b29d592`, `09339f5`, `1b809e4`), fast-forwarded into `sando`, pushed to `private` and `origin`, then `sando-rebuild`.
+
+- **Web:** the side pane has a new **Board** tab (`+` menu, or the "Open tab" launcher). It shows a Planner chat's status board
+  with the same markdown as the chat (tables, mermaid). It has refresh, a "change board" picker (for the whole project or only
+  this session), "open in Planner" and the board's full-report link. It polls every 10 s while visible. Tested: a line written to
+  the board while the pane was open showed up by itself.
+- **Phone:** a ▦ button next to the menu and new-chat buttons opens the same board as a drawer from the right. Tapping
+  outside or ✕ closes it. The header title moved over so the button does not cover it.
+- **Which chat:** a session pick, else the project pick, else the Planner chat linked to the workspace's project (matched
+  by path, then folder name, then project name; a git worktree also tries its main checkout), else a new
+  **"Sando · <project>"** chat with a starter board. `~/apps/ZCode` got **chat #567 "Sando · Sando"**.
+- **The model keeps it:** a session with a board gets one short system section: "your board is Planner chat #N, keep it
+  current with update_chat_status, chat_id N, one section per call". Sessions without a board get nothing, so their
+  requests are unchanged. Tested: Bonsai 2 27B, headless, with no chat id in the prompt, wrote its result on #567.
+- **How the pieces talk:** the browser calls the Sando server (`/api/sando/board/*`, behind the web token). The server
+  calls the Planner on loopback with the token the Planner plugin already has (`mcp.json`). The token never reaches the
+  browser. The pick is saved in `~/.zcode/v2/sando-boards.json`, and the agent runtime reads that file.
+
+### How it was checked
+- Core 44/44, CLI 52/52 (includes the phone-home guard and the red-team deterministic tests), server 8/8, UI 30/30.
+  `pnpm typecheck` is clean. Lint has 0 errors (72 warnings, the same as before). `verify:pre-push` and the architecture check pass.
+- Live red-team (kit, 43 cases, Lily 9B, under the GPU lock): without the board section 10 pass / 32 fail, then 8 / 33 on a
+  repeat. With it, 8 / 32 twice. That is inside run-to-run noise, and the fail count never went above the baseline (33).
+  Note: the "pass ≥ 9" gate already fails about one run in two on Lily with no changes at all.
+- The chat title is outside text, so line breaks (including U+2028), controls and invisible smuggling characters are stripped,
+  and the title is quoted before it goes into the prompt (tested with a hostile title).
+- Screenshots (live): `~/apps/fleet/logs/sando-board-{desktop,phone,phone-header}.png`, also on chat 509's "🧩 Planner UI".
+
+### Rollback
+`rm -rf ~/apps/sando-release && mv ~/apps/sando-release.old ~/apps/sando-release && systemctl --user restart sando-web.service`
+
+### Not done / limits
+- The desktop (Electron) app has no Board: the Planner proxy lives on the web server.
+- Images on a board load only in a browser that already has the Planner media cookie.
+- Refresh is polling, not the Planner's `/events` socket (that one needs a ticket per connection).
+- The Planner labels every MCP edit "Claude Code (MCP)", whichever model made it.
+
 ## 2026-10-29: Z.ai phone-home removed — `phonehome: none` (branch `sando`, RD-2828)
 
 Chuck asked: "Any way to erase it from the code?" Yes. Commits `cbff8df` and `4c1f37c` on `sando` are pushed to
