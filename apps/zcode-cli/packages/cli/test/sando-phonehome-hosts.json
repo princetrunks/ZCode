@@ -131,6 +131,7 @@
   ],
   "projects.shrinetech.io": [
     "config/default.json",
+    "packages/server/src/sandoBoard.ts",
     "packages/ui/src/lib/audioSpec.ts"
   ],
   "raw.githubusercontent.com": [

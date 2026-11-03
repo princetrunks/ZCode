@@ -78,3 +78,10 @@ test("the section lands in the leading system messages, not mid-conversation", (
   assert.ok(result.sections.some((x) => x.source === "sando_board"), promptProfile);
   }
 });
+
+test("titles lose line separators, controls and invisible smuggling characters", () => {
+  const path = boardsFile({
+    workspaces: { "/w": { chatId: 3, title: "a\u2028b\nc\u0000d\ufe0f\u{e0041}\u{e0101}\u202ee" } },
+  });
+  assert.equal(resolveSandoBoardBinding({ workspacePath: "/w" }, path).title, "a b c de");
+});

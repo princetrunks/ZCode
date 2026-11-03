@@ -117,8 +117,7 @@ export function WorkspaceHeader({
 }) {
   const [selectedEditor, setSelectedEditor] = useState<EditorInfo | null>(null);
   const isNarrowViewport = useNarrowViewport();
-  const shouldOffsetHeaderForWindowControls =
-    !isSidebarVisible || (!isDesktop && isNarrowViewport);
+  const shouldOffsetHeaderForWindowControls = !isSidebarVisible || (!isDesktop && isNarrowViewport);
   // Linux 与 Windows 共用内联窗控，不再预留旧悬浮窗控的标题栏区域。
   const usesInlineWindowControls = Boolean(isWindowsDesktop || (isDesktop && !isMacDesktop));
 
@@ -131,8 +130,8 @@ export function WorkspaceHeader({
         headerWindowControlsPaddingClass = isMacFullscreen ? "pl-38" : "pl-58";
       }
     } else if (!isDesktop && isNarrowViewport) {
-      // Sando phone layout: the overlay holds only the 44 px drawer toggle + new task.
-      headerWindowControlsPaddingClass = "pl-26";
+      // Sando phone layout: the overlay holds the 44 px drawer toggle, new task and the Board drawer toggle.
+      headerWindowControlsPaddingClass = "pl-37";
     } else {
       headerWindowControlsPaddingClass = hasUpdateReady ? "pl-44" : "pl-38";
     }

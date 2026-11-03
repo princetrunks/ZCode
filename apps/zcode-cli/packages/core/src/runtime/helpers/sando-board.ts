@@ -58,7 +58,16 @@ function validBinding(value: unknown): SandoBoardBinding | null {
   const chatId = Number((value as { chatId?: unknown }).chatId);
   if (!Number.isInteger(chatId) || chatId <= 0) return null;
   const rawTitle = (value as { title?: unknown }).title;
-  const title = typeof rawTitle === "string" ? rawTitle.slice(0, 120) : undefined;
+  // The title is outside text (anyone who can rename the Planner chat sets it): line breaks of every kind, other controls,
+  // variation selectors and Unicode tag characters (invisible smuggling, see the red-team kit) become nothing or a space.
+  const title =
+    typeof rawTitle === "string"
+      ? rawTitle
+          .replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/gu, " ")
+          .replace(/[\ufe00-\ufe0f\u{e0000}-\u{e007f}\u{e0100}-\u{e01ef}\u200b-\u200f\u202a-\u202e\u2066-\u2069]/gu, "")
+          .trim()
+          .slice(0, 120)
+      : undefined;
   return title ? { chatId, title } : { chatId };
 }
 
