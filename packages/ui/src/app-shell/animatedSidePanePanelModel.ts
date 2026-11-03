@@ -5,18 +5,22 @@ export type OpenTabLauncherItemId =
   | "review"
   | "terminal"
   | "browser"
-  | "developer-tools";
+  | "developer-tools"
+  | "sando-board";
 
 export function resolveOpenTabLauncherItemIds({
   developerToolsEnabled,
   hasReviewTab,
   canOpenSelectionSideConversation = false,
   supportsEmbeddedBrowser = true,
+  sandoBoardEnabled = false,
 }: {
   developerToolsEnabled: boolean;
   hasReviewTab: boolean;
   canOpenSelectionSideConversation?: boolean;
   supportsEmbeddedBrowser?: boolean;
+  /** Sando board: web workbench only (the Planner proxy lives on the web server). */
+  sandoBoardEnabled?: boolean;
 }): OpenTabLauncherItemId[] {
   const itemIds: OpenTabLauncherItemId[] = [];
 
@@ -36,6 +40,10 @@ export function resolveOpenTabLauncherItemIds({
 
   if (developerToolsEnabled) {
     itemIds.push("developer-tools");
+  }
+
+  if (sandoBoardEnabled) {
+    itemIds.push("sando-board");
   }
 
   return itemIds;

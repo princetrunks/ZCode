@@ -48,7 +48,8 @@ export type ContextSource =
   | "session_guidance" // 当前可用内置能力指导
   | "output_style" // 输出风格
   | "context_management" // 长上下文管理提示
-  | "desktop_context"; // ZCode Desktop 渲染与交互协议
+  | "desktop_context" // ZCode Desktop 渲染与交互协议
+  | "sando_board"; // Sando: the Planner status board this session keeps current
 
 export type ContextInjectionTarget = "system" | "meta_user";
 

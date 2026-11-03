@@ -3,6 +3,7 @@ import { cn } from "@/components/lib/utils.js";
 import {
   ArrowLeftIcon,
   ArrowRightIcon,
+  LayoutDashboardIcon,
   MenuIcon,
   MessageCirclePlus,
   PanelLeftClose,
@@ -46,6 +47,9 @@ interface DesktopTopOverlayProps {
   /** Sando: phone-width web page — show a 44 px drawer toggle and keep the overlay above the open drawer. */
   isMobileDrawer?: boolean;
   newTaskDisabledReason?: string;
+  /** Sando board on phones: toggles the off-canvas board drawer (web only; absent = no button). */
+  onToggleSandoBoard?: () => void;
+  isSandoBoardOpen?: boolean;
 }
 
 export function DesktopTopOverlay({
@@ -77,6 +81,8 @@ export function DesktopTopOverlay({
   hideTaskNavigationButtons: hideTaskNavigationButtonsProp = false,
   isMobileDrawer = false,
   newTaskDisabledReason,
+  onToggleSandoBoard,
+  isSandoBoardOpen = false,
 }: DesktopTopOverlayProps) {
   const { intl } = useZCodeIntl();
   const SidebarToggleIcon = isSidebarVisible ? PanelLeftClose : PanelLeftOpen;
@@ -102,9 +108,10 @@ export function DesktopTopOverlay({
         paddingRight: WINDOWS_CAPTION_CONTROLS_RIGHT_INSET_VAR,
       }
     : undefined;
-  const topOverlayWidthStyle = isSidebarVisible && !isMobileDrawer
-    ? { width: "var(--workspace-sidebar-panel-width)" }
-    : undefined;
+  const topOverlayWidthStyle =
+    isSidebarVisible && !isMobileDrawer
+      ? { width: "var(--workspace-sidebar-panel-width)" }
+      : undefined;
 
   return (
     <div
@@ -233,6 +240,18 @@ export function DesktopTopOverlay({
               <MessageCirclePlus className="size-4" />
             </DesktopTopOverlayActionButton>
           </div>
+
+          {isMobileDrawer && onToggleSandoBoard ? (
+            <DesktopTopOverlayActionButton
+              buttonClassName={cn(mobileTouchButtonClassName, isSandoBoardOpen && "bg-accent")}
+              title={intl.formatMessage({ id: "sandoBoard.open" })}
+              ariaLabel={intl.formatMessage({ id: "sandoBoard.open" })}
+              testId="sando-mobile-board-toggle"
+              onClick={onToggleSandoBoard}
+            >
+              <LayoutDashboardIcon className="size-5" />
+            </DesktopTopOverlayActionButton>
+          ) : null}
 
           {/* <div className="flex items-center [app-region:no-drag]"> */}
           {/* 侧栏收起后，更新按钮之前会跟着“展开态的容器宽度阈值”一起被隐藏。

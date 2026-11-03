@@ -37,6 +37,7 @@ import {
 } from "@zcode/shared";
 import { connectRemote, createRemoteBackend, type RemoteConnection } from "./remote/index.js";
 import { createHostCapabilityStore } from "./hostCapability.js";
+import { registerSandoBoardRoutes } from "./sandoBoard.js";
 
 function wrapWebSocket(ws: WebSocket): ISocket {
   const onData = new Emitter<VSBuffer>();
@@ -51,7 +52,11 @@ function wrapWebSocket(ws: WebSocket): ISocket {
   // the web client sent nothing while the user read a reply — the next message went out on a dead socket (measured:
   // idle socket closed at 125 s, 0 server pings). A protocol ping every 25 s keeps the tunnel open; browsers pong it.
   const keepalive = setInterval(() => {
-    try { if (ws.readyState === ws.OPEN) ws.ping(); } catch { /* socket already gone */ }
+    try {
+      if (ws.readyState === ws.OPEN) ws.ping();
+    } catch {
+      /* socket already gone */
+    }
   }, 25_000);
   ws.on("close", () => {
     clearInterval(keepalive);
@@ -244,7 +249,14 @@ function tokensEqual(given: string | null | undefined, expected: string): boolea
 // at most 20 lines per client IP a minute.
 const authLogBudget = new Map<string, { minute: number; n: number }>();
 function logAuthRefusal(c: Context, status: number, reason: string): void {
-  const ip = (c.req.header("cf-connecting-ip") || (c.req.header("x-forwarded-for") || "").split(",").pop() || "").trim().slice(0, 64) || "local";
+  const ip =
+    (
+      c.req.header("cf-connecting-ip") ||
+      (c.req.header("x-forwarded-for") || "").split(",").pop() ||
+      ""
+    )
+      .trim()
+      .slice(0, 64) || "local";
   const minute = Math.floor(Date.now() / 60000);
   const b = authLogBudget.get(ip);
   if (!b || b.minute !== minute) {
@@ -254,16 +266,23 @@ function logAuthRefusal(c: Context, status: number, reason: string): void {
     return;
   }
   const line = {
-    ts: new Date().toISOString(), status, reason, ip,
+    ts: new Date().toISOString(),
+    status,
+    reason,
+    ip,
     country: (c.req.header("cf-ipcountry") || "").slice(0, 2) || undefined,
-    method: c.req.method, path: new URL(c.req.url).pathname.slice(0, 200),
-    ua: (c.req.header("user-agent") || "").replace(/[\u0000-\u001f]/g, "").slice(0, 160) || undefined,
+    method: c.req.method,
+    path: new URL(c.req.url).pathname.slice(0, 200),
+    ua:
+      (c.req.header("user-agent") || "").replace(/[\u0000-\u001f]/g, "").slice(0, 160) || undefined,
   };
   console.warn(`[sando-auth] ${JSON.stringify(line)}`);
 }
 
 function isHttpsRequest(c: Context): boolean {
-  const proto = ((c.req.header("x-forwarded-proto") || "").split(",")[0] ?? "").trim().toLowerCase();
+  const proto = ((c.req.header("x-forwarded-proto") || "").split(",")[0] ?? "")
+    .trim()
+    .toLowerCase();
   return proto === "https" || new URL(c.req.url).protocol === "https:";
 }
 
@@ -296,12 +315,19 @@ function isAllowedWebSocketOrigin(c: Context): boolean {
   if (!origin) {
     return true;
   }
-  const extra = (process.env["ZCODE_ALLOWED_ORIGINS"] || "").split(",").map((s) => s.trim()).filter(Boolean);
+  const extra = (process.env["ZCODE_ALLOWED_ORIGINS"] || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
   if (extra.includes(origin)) {
     return true;
   }
   try {
-    const host = ((c.req.header("x-forwarded-host") || c.req.header("host") || "").split(",")[0] ?? "").trim().toLowerCase();
+    const host = (
+      (c.req.header("x-forwarded-host") || c.req.header("host") || "").split(",")[0] ?? ""
+    )
+      .trim()
+      .toLowerCase();
     return Boolean(host) && new URL(origin).host.toLowerCase() === host;
   } catch {
     return false;
@@ -401,6 +427,12 @@ export function createHttpServer(
 
   app.get("/api/server-info", (c) => c.json(createServerInfo(options)));
   app.post("/api/rpc-host-capability", (c) => c.json(hostCapabilities.issue()));
+  // Sando board side pane: Planner status board, proxied so the Planner token stays on the server (sandoBoard.ts).
+  // Without a web token the routes would be open to the network, so they exist only behind the token or on loopback.
+  const boardHost = options.host?.trim() || "localhost";
+  if (authToken || boardHost === "localhost" || boardHost === "127.0.0.1" || boardHost === "::1") {
+    registerSandoBoardRoutes(app);
+  }
 
   // 普通 `/ws` 永远是 terminal-client；浏览器/任意客户端设置旧 mode header
   // 都不能再把自己提升为 trusted host。

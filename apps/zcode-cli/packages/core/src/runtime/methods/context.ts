@@ -26,6 +26,7 @@ import { buildContextHistoryEntries } from "./context-history-entries.js";
 import { resolveRuntimeEmbeddedSearchEnabled } from "./embedded-search-branch.js";
 import { getContextSourceShellDisplayName } from "./session-shell-environment.js";
 import { resolveRuntimePromptProfile } from "./config.js";
+import { buildSandoBoardSection, resolveSandoBoardBinding } from "../helpers/sando-board.js";
 
 export { buildContextHistoryEntries };
 
@@ -143,7 +144,22 @@ export function createContextBuilderFromSnapshot(
     promptProfile: resolveRuntimePromptProfile(this, options.model),
   };
 
-  return createContextBuilder(contextConfig).setToolRegistry(this.registry);
+  const builder = createContextBuilder(contextConfig).setToolRegistry(this.registry);
+  // Sando board: only sessions with a Planner board mapping get the section (see helpers/sando-board.ts).
+  const board = resolveSandoBoardBinding({
+    sessionId: this.sessionId,
+    workspacePath: this.workspaceRoot ?? snapshot.workingDirectory,
+  });
+  if (board) {
+    const content = buildSandoBoardSection(board);
+    builder.addSection({
+      name: "Sando status board",
+      source: "sando_board",
+      content,
+      preview: content.slice(0, 100),
+    });
+  }
+  return builder;
 }
 
 export async function loadProjectMemoryRoot(

@@ -32,6 +32,7 @@ import { usePaneSessionPersistence } from "@/v4/usePaneSessionPersistence.js";
 import { requestV4ComposerDraftWorkspaceTransfer } from "@/v4/composer/composerDraftWorkspaceTransfer.js";
 import { ChatEmptyWorkspacePreviewMenu } from "@/ChatEmptyState.js";
 import { DesktopTopOverlay } from "@/DesktopTopOverlay.js";
+import { SandoBoardPane } from "@/SandoBoardPane.js";
 import { DesktopWindowFrame } from "@/DesktopWindowFrame.js";
 import { WorkspacePluginPreview } from "@/WorkspacePluginPreview.js";
 import { useIsOfficeMode } from "@/hooks/useInterfaceMode.js";
@@ -303,6 +304,7 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
   handleOpenTreemapping,
   handleOpenWhiteboard,
   handleOpenDeveloperTools,
+  handleOpenSandoBoard,
   handleOpenTerminalTab,
   handleToggleGit,
   handleOpenGitReview,
@@ -356,6 +358,10 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
   // Sando: phone-width web page → the sidebar is an off-canvas drawer over a full-width main pane.
   const isNarrowViewport = useNarrowViewport();
   const isMobileDrawer = !isDesktop && isNarrowViewport;
+  // Sando board on phones: the side pane has no room there, so the board is its own off-canvas drawer (right edge).
+  const [isMobileBoardOpen, setIsMobileBoardOpen] = useState(false);
+  const handleToggleMobileBoard = useCallback(() => setIsMobileBoardOpen((open) => !open), []);
+  const handleCloseMobileBoard = useCallback(() => setIsMobileBoardOpen(false), []);
   const [draftHeaderDropTargetController, setDraftHeaderDropTargetController] =
     useState<ConversationDropTargetController | null>(null);
   const fileTreeOpenRequestIdRef = useRef(0);
@@ -1479,6 +1485,7 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
       onOpenBrowserTab={handleOpenBrowserTab}
       onOpenWhiteboard={handleOpenWhiteboard}
       onOpenDeveloperTools={handleOpenDeveloperTools}
+      {...(isDesktop ? {} : { onOpenSandoBoard: handleOpenSandoBoard })}
       onOpenTerminalTab={handleOpenTerminalTab}
       onOpenReviewTab={handleToggleGit}
       onOpenSelectionSideConversation={handleOpenSelectionSideConversationLauncher}
@@ -1994,12 +2001,39 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
             {sidePanePanel}
           </ResizablePanelGroup>
         </div>
+        {isMobileDrawer && isMobileBoardOpen ? (
+          <>
+            <button
+              type="button"
+              aria-label={intl.formatMessage({ id: "sandoBoard.close" })}
+              data-sando-board-backdrop="true"
+              className="fixed inset-0 z-40 cursor-default bg-black/50"
+              onClick={handleCloseMobileBoard}
+            />
+            <div
+              data-sando-board-drawer="true"
+              className="fixed inset-y-0 right-0 z-50 w-[min(92vw,440px)] overflow-hidden bg-background shadow-2xl pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] pr-[env(safe-area-inset-right)]"
+            >
+              <ScopedErrorBoundary scope="sando-board-drawer" variant="panel">
+                <SandoBoardPane
+                  workspacePath={workspaceAbsPath}
+                  sessionId={activeTaskId}
+                  active
+                  onClose={handleCloseMobileBoard}
+                />
+              </ScopedErrorBoundary>
+            </div>
+          </>
+        ) : null}
         <ScopedErrorBoundary
           scope="desktop-top-overlay"
           resetKeys={workspaceSidebarVisibilityResetKeys}
           variant="silent"
         >
           <DesktopTopOverlay
+            {...(isMobileDrawer
+              ? { onToggleSandoBoard: handleToggleMobileBoard, isSandoBoardOpen: isMobileBoardOpen }
+              : {})}
             newTaskDisabledReason={workspaceReadOnlyReason}
             workspaceAbsPath={workspaceAbsPath}
             isMacDesktop={isMacDesktop}

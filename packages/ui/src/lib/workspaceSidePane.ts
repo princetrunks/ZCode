@@ -85,6 +85,15 @@ export interface DeveloperToolsSidePaneTab {
   openedAt?: number;
 }
 
+/** Sando: the Planner status board of this workspace/session (web workbench). */
+export interface SandoBoardSidePaneTab {
+  id: "sando-board";
+  type: "sando-board";
+  ownerTaskId?: string | null;
+  workspaceKey?: string | null;
+  openedAt?: number;
+}
+
 export interface TerminalSidePaneTab {
   id: string;
   type: "terminal";
@@ -522,6 +531,7 @@ export type WorkspaceSidePaneTab =
   | WhiteboardSidePaneTab
   | ModelTrajectorySidePaneTab
   | DeveloperToolsSidePaneTab
+  | SandoBoardSidePaneTab
   | TerminalSidePaneTab
   | BrowserUseSidePaneTab
   | SubagentSessionSidePaneTab
@@ -668,6 +678,14 @@ function createDeveloperToolsSidePaneTab(): DeveloperToolsSidePaneTab {
   return {
     id: "developer-tools",
     type: "developer-tools",
+    openedAt: Date.now(),
+  };
+}
+
+function createSandoBoardSidePaneTab(): SandoBoardSidePaneTab {
+  return {
+    id: "sando-board",
+    type: "sando-board",
     openedAt: Date.now(),
   };
 }
@@ -1055,6 +1073,7 @@ const WORKSPACE_GLOBAL_SIDE_PANE_TAB_TYPES = new Set<WorkspaceSidePaneTab["type"
   "git",
   "developer-tools",
   "treemapping",
+  "sando-board",
 ]);
 
 function isWorkspaceGlobalSidePaneTab(tab: WorkspaceSidePaneTab): boolean {
@@ -1584,6 +1603,12 @@ export function activateDeveloperToolsSidePane(
   current: WorkspaceSidePaneState | null,
 ): WorkspaceSidePaneState {
   return activateSidePaneTab(current, createDeveloperToolsSidePaneTab());
+}
+
+export function activateSandoBoardSidePane(
+  current: WorkspaceSidePaneState | null,
+): WorkspaceSidePaneState {
+  return activateSidePaneTab(current, createSandoBoardSidePaneTab());
 }
 
 export function openTerminalSidePane(

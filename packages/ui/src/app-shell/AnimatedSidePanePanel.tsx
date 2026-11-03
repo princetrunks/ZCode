@@ -29,6 +29,7 @@ import { TreemappingPane } from "@/TreemappingPane.js";
 import { WhiteboardPane } from "@/WhiteboardPane.js";
 import { ModelTrajectoryPane } from "@/ModelTrajectoryPane.js";
 import { DeveloperToolsPane } from "@/DeveloperToolsPane.js";
+import { SandoBoardPane } from "@/SandoBoardPane.js";
 import { cn } from "@/components/lib/utils.js";
 import { Button } from "@/components/ui/button.js";
 import {
@@ -93,6 +94,7 @@ import {
   BugIcon,
   FileDiffIcon,
   GlobeIcon,
+  LayoutDashboardIcon,
   MessageSquareTextIcon,
   PlusIcon,
   SquareTerminalIcon,
@@ -313,6 +315,7 @@ export function AnimatedSidePanePanel({
   onOpenBrowserTab,
   onOpenWhiteboard: _onOpenWhiteboard,
   onOpenDeveloperTools,
+  onOpenSandoBoard,
   onOpenTerminalTab,
   onOpenReviewTab,
   onOpenSelectionSideConversation,
@@ -378,6 +381,8 @@ export function AnimatedSidePanePanel({
   onOpenBrowserTab: () => void;
   onOpenWhiteboard: () => void;
   onOpenDeveloperTools: () => void;
+  /** Sando board (web workbench only); absent = no Board entry. */
+  onOpenSandoBoard?: () => void;
   onOpenTerminalTab: () => void;
   onOpenReviewTab: () => void;
   onOpenSelectionSideConversation: () => void;
@@ -757,6 +762,12 @@ export function AnimatedSidePanePanel({
             <span>{intl.formatMessage({ id: "developerTools.title" })}</span>
           </DropdownMenuItem>
         ) : null}
+        {onOpenSandoBoard ? (
+          <DropdownMenuItem data-side-pane-add-item="sando-board" onSelect={onOpenSandoBoard}>
+            <LayoutDashboardIcon className="size-4" />
+            <span>{intl.formatMessage({ id: "sandoBoard.title" })}</span>
+          </DropdownMenuItem>
+        ) : null}
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -791,12 +802,19 @@ export function AnimatedSidePanePanel({
       icon: BugIcon,
       onOpen: onOpenDeveloperTools,
     },
+    "sando-board": {
+      id: "sando-board",
+      label: intl.formatMessage({ id: "sandoBoard.title" }),
+      icon: LayoutDashboardIcon,
+      onOpen: () => onOpenSandoBoard?.(),
+    },
   };
   const openTabLauncherItems: OpenTabLauncherItem[] = resolveOpenTabLauncherItemIds({
     canOpenSelectionSideConversation,
     developerToolsEnabled,
     hasReviewTab,
     supportsEmbeddedBrowser,
+    sandoBoardEnabled: Boolean(onOpenSandoBoard),
   })
     .filter((itemId) => !isOfficeMode || (itemId !== "terminal" && itemId !== "review"))
     .map((itemId) => openTabLauncherItemById[itemId]);
@@ -885,6 +903,7 @@ export function AnimatedSidePanePanel({
         developerToolsTitle: intl.formatMessage({
           id: "developerTools.title",
         }),
+        sandoBoardTitle: intl.formatMessage({ id: "sandoBoard.title" }),
         terminalTitle: intl.formatMessage({ id: "terminal.title" }),
         subagentTypeLabel: intl.formatMessage({ id: "sidePane.subagent" }),
         subagentDirectoryTitle: intl.formatMessage({
@@ -1253,6 +1272,12 @@ export function AnimatedSidePanePanel({
                               enabled={isVisible && tab.id === visibleActiveTabId}
                             />
                           </ServiceProvider>
+                        ) : tab.type === "sando-board" ? (
+                          <SandoBoardPane
+                            workspacePath={workspaceAbsPath}
+                            sessionId={activeTaskId}
+                            active={isVisible && tab.id === visibleActiveTabId}
+                          />
                         ) : tab.type === "terminal" ? (
                           <SidePaneTerminalPane
                             services={services}
