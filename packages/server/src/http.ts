@@ -37,7 +37,7 @@ import {
 } from "@zcode/shared";
 import { connectRemote, createRemoteBackend, type RemoteConnection } from "./remote/index.js";
 import { createHostCapabilityStore } from "./hostCapability.js";
-import { registerSandoBoardRoutes } from "./sandoBoard.js";
+import { registerSandoBoardRoutes } from "./sandoBoardRoutes.js";
 
 function wrapWebSocket(ws: WebSocket): ISocket {
   const onData = new Emitter<VSBuffer>();

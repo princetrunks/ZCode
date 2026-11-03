@@ -12,9 +12,9 @@ import {
   normalizeWorkspace,
   parseChatId,
   pickLinkedChat,
-  registerSandoBoardRoutes,
   resolvePlannerCredentials,
 } from "../src/sandoBoard.ts";
+import { registerSandoBoardRoutes } from "../src/sandoBoardRoutes.ts";
 
 const SECRET = "Bearer test-secret-token";
 
