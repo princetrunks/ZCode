@@ -45,6 +45,8 @@ import { FormBlock } from "@/components/ai-elements/form-block.js";
 import { isFormLanguage } from "@/lib/formSpec.js";
 import { AudioBlock, ChartBlock, FlowBlock } from "@/components/ai-elements/rich-blocks.js";
 import { isAudioLanguage, isChartLanguage, isFlowLanguage } from "@/lib/richFences.js";
+import { Model3dBlock } from "@/components/ai-elements/model3d-view.js";
+import { isModel3dLanguage } from "@/lib/model3dSpec.js";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -1592,6 +1594,17 @@ export const MessageResponse = memo(
           if (!renderStreaming && isChartLanguage(language)) return <ChartBlock code={codeText} fallback={codeBlock} />;
           if (!renderStreaming && isFlowLanguage(language)) return <FlowBlock code={codeText} fallback={codeBlock} />;
           if (!renderStreaming && isAudioLanguage(language)) return <AudioBlock code={codeText} fallback={codeBlock} />;
+          // Sando: ```model3d {"src": "<workspace file>"} → inline 3D viewer (SANDO-VIEWER3D.md).
+          if (!renderStreaming && isModel3dLanguage(language)) {
+            return (
+              <Model3dBlock
+                code={codeText}
+                fallback={codeBlock}
+                workspacePath={workspacePath}
+                workspaceHomePath={workspaceHomePath}
+              />
+            );
+          }
           return codeBlock;
         },
         blockquote: MarkdownBlockquote,

@@ -1,5 +1,61 @@
 # Fleet report: Sando
 
+## 2026-11-05: 3D model viewer: ```model3d + model files in the preview pane (branch `fleet/sando-viewer3d-20261105`, NOT deployed)
+
+Chuck asked: "can we get 3d model viewer capabilities here in the chat / lily / Sando? so I can inspect the 3d models". The Planner
+side is a separate branch (`viewer3d-1105`). This is the Sando web workbench side, with the same fence contract. Spec: `SANDO-VIEWER3D.md`.
+
+- **What you get:** `.glb` / `.gltf` / `.stl` / `.3mf` / `.obj` draw in an orbit / zoom / pan viewer. It has Reset, Wireframe,
+  Light/Dark and Full screen (an overlay fallback for iPhone), plus Stop, and a readout: `W × D × H mm · triangles · file size`.
+  STL / 3MF / OBJ are mm, glTF is m ×1000, STL / 3MF are Z-up.
+  - **Preview pane:** a markdown link to a model in any reply, the file tree, or a workspace path open opens it in the viewer, and
+    it loads at once.
+  - **```model3d** `{"src":"models/part.stl","label":"…"}` in a reply: a card, loaded on tap.
+- **How the bytes get there:** the web workbench has no HTTP file route, so the viewer reads through the existing
+  `IFileService.readFileRange` RPC. That is raw bytes in 1 MB windows, 4 in flight, and it works for local and remote workspaces.
+  No server change.
+- **Safety:** three.js is bundled as a lazy chunk (170 KB gzip, loaded only when a viewer starts), with no CDN and no decoder
+  downloads. A fence src must be a workspace path: URL schemes, `//`, `..` and non-model files are refused.
+  - A `.gltf` may read only files in its own folder. Every other URL inside a model maps to `data:,refused`.
+  - At most 3 live WebGL contexts per page. Rendering is on demand, with no animation loop. Dispose + forced context loss on
+    Stop / unmount. Files over 256 MB are refused.
+
+### How it was checked
+- `pnpm typecheck`: clean. `pnpm lint`: 0 errors, 72 warnings (the same as before; none in the new files).
+  `pnpm architecture:check --changed`: OK, 0 violations.
+- UI tests 39/39 (`cd packages/ui && pnpm exec tsx --test test/*.test.ts`; new `test/model3d.test.ts` has 9). Phone-home guard 8/8,
+  including "no new hard-coded external host".
+  - From the repo root, `nonCliAcpRetirement` and `sandoBoard` fail on `@/` alias resolution. That happens with or without this branch.
+- `pnpm --filter @zcode/web build` and `pnpm build:zcode` (scratch out-dir `/tmp`) both pass. three.js lands only in
+  `model3dViewer-*.js`, not in `index-*.js`.
+- **Live, headless Chromium (SwiftShader).** I used a scratch release on 127.0.0.1:3047, with HOME / data dir in `/tmp`, and a
+  loopback stub LLM so the reply was canned and no model or GPU was used. Every load was by PID; both processes were stopped.
+  - Pane: torii_70mm.stl `64.0 × 16.0 × 67.7 mm · 2,248 triangles`, 1.4 s.
+  - Pane: pcb_enclosure_box.3mf `94.8 × 64.8 × 30.0 mm · 4,872`.
+  - Pane: torii_ai.glb (33 MB, textured) `978,878 triangles`, 2.1 s. Its readout says ~1 m because the file is in glTF metres.
+  - Pane: a hand-made .gltf with a sibling `cube%20data.bin`: `20 × 20 × 20 mm`.
+  - Pane: an .obj also loaded.
+  - Hostile .gltf with `../` buffer: refused with a clear message.
+  - Hostile .gltf with an `http://` texture: shape drawn, texture never requested.
+  - Fences in a streamed reply: 2 drawn, the `https://` one refused with its source shown. The markdown link → pane viewer.
+  - Full screen: API + overlay, Esc closes.
+  - **0 non-loopback requests** in every run.
+- Screenshots: `~/apps/fleet/logs/sando-viewer3d/` (`chat-fence-live`, `chat-link-pane`, `pane-torii_ai.glb`, `pane-full`,
+  `pane-evil.gltf`, `phone-fence-live`, `phone-wire-light`).
+
+### To ship
+Merge `fleet/sando-viewer3d-20261105` into `sando`, push `sando` to **`private`** (sando-rebuild pulls `private sando`), then
+`sando-rebuild`. The install step needs `three` + `@types/three` (already in `pnpm-lock.yaml`). Rollback is the usual
+`sando-release.old` swap.
+
+### Not done / limits
+- The Electron desktop app is not tested (same UI package). Real phone / iPhone hardware is not tested, only phone viewport
+  emulation; the overlay fallback path ran in Chromium.
+- The 3-context eviction is not exercised by a test.
+- There is no measuring tool, section view or glTF animation playback. A fence cannot point at Planner-served files (use a workspace path).
+- Pre-existing, not from this branch: opening any file through the path-open event logs a React `useCallback … reading 'length'`
+  console error (zustand / `useResolvedRemoteWorkspaceSessionId` / `useSettingsSync`). It shows the same for a `.txt`.
+
 ## 2026-11-03: Board side pane — the Planner status board inside the Sando workbench (deployed, `1b809e4`)
 
 Chuck asked for Sando to have the status board too. It is live on sando-web. The branch is `fleet/sando-board-20261103`

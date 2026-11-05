@@ -22,6 +22,8 @@ import type { CodeCommentPreview, CodeCommentRange } from "@/lib/codeCommentCont
 import type { Theme } from "@/useTheme.js";
 import type { OfficeFilePreviewKind } from "@/lib/officeFilePreview.js";
 import { PreviewPaneOfficeContent } from "@/previewPaneOfficeContent.js";
+import { Model3dView } from "@/components/ai-elements/model3d-view.js";
+import type { Model3dFileReader } from "@/lib/model3dFile.js";
 import type { PptxElementReferenceSource } from "@/lib/pptxElementReference.js";
 import type { MediaCodeViewerSource, PptxReferencePreviewNavigation } from "@/lib/codeViewer.js";
 import { resolveCodeReviewContentProjection } from "@/previewPaneCodeReview.js";
@@ -44,6 +46,8 @@ interface PreviewPaneContentProps {
   loadingOfficePreview: boolean;
   officePreview: FileBinaryPreview | null;
   officePreviewKind: OfficeFilePreviewKind | null;
+  /** Sando: set (the workspace file service) when the source is a 3D model file. */
+  model3dReader?: Model3dFileReader | null;
   loadingPptxPreview: boolean;
   pptxPreviewData: ArrayBuffer | null;
   pptxViewerLabels: PptxPreviewViewerLabels;
@@ -105,6 +109,7 @@ export function PreviewPaneContent({
   loadingOfficePreview,
   officePreview,
   officePreviewKind,
+  model3dReader,
   loadingPptxPreview,
   pptxPreviewData,
   pptxViewerLabels,
@@ -306,6 +311,10 @@ export function PreviewPaneContent({
     }
 
     return <PdfPreviewContent source={pdfViewerSource} labels={pdfViewerLabels} />;
+  }
+
+  if (source.type === "file" && model3dReader) {
+    return <Model3dView key={source.path} path={source.path} label={source.title} reader={model3dReader} autoStart variant="pane" />;
   }
 
   if (source.type === "file" && officePreviewKind) {

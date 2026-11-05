@@ -65,6 +65,7 @@ import {
 } from "@/components/ui/dropdown-menu.js";
 import { readLastSelectedEditorId } from "@/lib/editorPreference.js";
 import { PreviewPaneContent } from "@/previewPaneContent.js";
+import { isModel3dPath } from "@/lib/model3dSpec.js";
 import {
   dispatchCodeCommentAddToChat,
   dispatchCodeCommentRemoveFromChat,
@@ -365,7 +366,8 @@ function shouldShowPreviewPaneHeaderDivider(source: CodeViewerSource | null): bo
     resolvePreviewPanePdfSource(source) ||
     resolvePreviewPanePptxSource(source) ||
     resolvePreviewPaneMediaSource(source) ||
-    (source?.type === "file" && getOfficeFilePreviewKind(source.path)),
+    (source?.type === "file" && getOfficeFilePreviewKind(source.path)) ||
+    (source?.type === "file" && isModel3dPath(source.path)),
   );
 }
 
@@ -386,7 +388,9 @@ function isPlainCodeSource(source: CodeViewerSource | null): boolean {
       // PDF、Office 和 PPTX 走专用只读预览，没有源码视图，也不该出现自动换行开关。
       !isPdfPreviewPath(source.path) &&
       !getOfficeFilePreviewKind(source.path) &&
-      !isPptxPreviewPath(source.path)
+      !isPptxPreviewPath(source.path) &&
+      // Sando: 3D models draw in the model viewer, never as text.
+      !isModel3dPath(source.path)
     );
   }
 
@@ -571,6 +575,7 @@ export function PreviewPane({
     [source],
   );
   const pptxSource = useMemo(() => resolvePreviewPanePptxSource(source), [source]);
+  const isModel3dSource = source?.type === "file" && isModel3dPath(source.path);
   const showDocumentHeaderDivider = shouldShowPreviewPaneHeaderDivider(source);
   const pptxSourcePath = pptxSource?.path ?? null;
   const pptxReferenceNavigation = pptxSource?.referenceNavigation ?? null;
@@ -591,7 +596,8 @@ export function PreviewPane({
     !pdfSource &&
     !officePreviewKind &&
     !pptxSource &&
-    !mediaSource
+    !mediaSource &&
+    !isModel3dSource
       ? source
       : null;
   const codeCommentBucket = useMemo(
@@ -1746,6 +1752,7 @@ export function PreviewPane({
             loadingOfficePreview={loadingOfficePreview}
             officePreview={officePreview}
             officePreviewKind={officePreviewKind}
+            model3dReader={isModel3dSource ? fileService : null}
             loadingPptxPreview={loadingPptxPreview}
             pptxPreviewData={pptxPreviewData}
             pptxViewerLabels={pptxViewerLabels}

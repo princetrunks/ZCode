@@ -2166,3 +2166,20 @@ body {
 .sando-flow__label { color: var(--color-foreground); overflow-wrap: anywhere; }
 .sando-flow__step.is-todo .sando-flow__label { color: var(--color-foreground-subtle); }
 .sando-flow__status { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--flow-c); }
+
+/* Sando (ShrineTech): 3D model viewer (components/ai-elements/model3d-view.tsx, SANDO-VIEWER3D.md). The stage colours
+   match the WebGL clear colour in lib/model3dViewer.ts so the poster and the canvas read as one surface. */
+.sando-m3d__stage { width: 100%; height: min(56vh, 380px); min-height: 200px; overflow: hidden; background: #eceef3; }
+.sando-m3d__stage[data-bg="dark"] { background: #1b1d24; }
+.sando-m3d__stage.flex-1 { height: auto; }
+.sando-m3d__canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; }
+.sando-m3d__canvas:active { cursor: grabbing; }
+.sando-m3d__stage[data-bg="dark"] .sando-m3d__poster { color: #a9b1d6; }
+@media (max-width: 767px) { .sando-m3d__stage { height: min(48vh, 300px); } }
+/* Full screen: the element itself under the Fullscreen API, a fixed overlay where there is none (iPhone). */
+.sando-m3d.sando-m3d--full {
+  position: fixed; inset: 0; z-index: 60; margin: 0; border-radius: 0; border: 0;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+.sando-m3d.sando-m3d--full .sando-m3d__stage { flex: 1 1 auto; height: auto; min-height: 0; }
+html.sando-m3d-locked, html.sando-m3d-locked body { overflow: hidden; }

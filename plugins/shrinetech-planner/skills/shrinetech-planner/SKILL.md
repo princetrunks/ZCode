@@ -72,4 +72,8 @@ Sando, the Planner's Chat and Lily draw these fences (one JSON object each; the 
   `filler_lora_ab`, i.e. ~/Desktop/Mac_Phoenix_Shared/filler_lora_ab/). It plays only in a browser logged in to the Planner, and never
   from a web URL. A ```abtest A/B listening block (`{"title","question","pairs":[{"id","a","b","prompt"?,"note"?}]}`) is answerable in
   the Planner's Chat and Lily only; Sando shows its source.
-Never read a chart, flow or clip aloud. In a voice reply say "I put a chart in the chat".
+- ```model3d: `{"src":"<path>.stl|.3mf|.obj|.glb|.gltf","label"}` (or a bare path). It draws an orbitable 3D viewer with the size in
+  mm and the triangle count. In Sando the src is a WORKSPACE file (relative to the workspace, or an absolute / `~/` path); in the
+  Planner it is a shared-folder file. Never a web URL. A plain markdown link to a model file opens the same viewer in the side pane.
+  Use it after you write or export a model (a print part, a TRELLIS mesh) so Chuck can inspect it.
+Never read a chart, flow, clip or model aloud. In a voice reply say "I put a chart in the chat".
