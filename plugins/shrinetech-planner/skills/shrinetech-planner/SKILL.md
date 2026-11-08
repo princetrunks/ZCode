@@ -16,6 +16,9 @@ description: How to use the ShrineTech Project Planner tools (mcp shrinetech-pla
   Charlie on the forge), `generate_image` (stills: `anime`, `realistic`, `krea2`, `qwen21` with reference images and stacked
   `loras`), `decide` (Laya typed decisions: choice / score, CPU, ~0.3 s), `train_lora` (LoRA Studio), `annotate_media`,
   `list_tools`, `log_work`, `get_calendar`.
+- **Focus threads** (2026-11-08): `list_focus_threads` (the pinned threads in order with status words and links) and
+  `thread_status {thread}` (one thread's board; `main` | `client` | `products` | `lab` | `trainee` | icon | chat id). The 🔒 lab
+  is **local-only**: it answers status words only, and nothing from it may go to a cloud model. Same as `/pp-threads`.
 
 ## House rules (these are the user's standing instructions — follow them)
 
@@ -30,6 +33,7 @@ description: How to use the ShrineTech Project Planner tools (mcp shrinetech-pla
 6. **Qwen-Image 2.1 is research-licensed.** Use `qwen21` stills for personal work and H3 plates, not for anything sold.
 7. **Log time with a generic description** for client work (`log_time`); the detail stays in the ticket.
 8. **Say what happened, not what will happen.** If a tool was not called, do not claim the work started.
+9. **A local-only thread stays local.** Never ask for, copy or summarise the 🔒 lab's content; `thread_status` gives status words only on purpose.
 
 ## Patterns
 
