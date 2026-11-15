@@ -1,5 +1,36 @@
 # Fleet report: Sando
 
+## 2026-11-15: `--deny-commands` — Sando enforces the local-only shell block list (branch only, not merged)
+
+Chuck asked for Sando to enforce the same bash deny list opencode gets in local-only chats. Branch
+`fleet/deny-commands-20261115` (pushed, NOT merged to `sando`; ~/bin/sando and sando-release untouched). Planner side:
+`fleet/sando-deny-wire-20261115` (off feature/ui-refresh-messages, pushed, not deployed, SANDO_LOCAL_ONLY_SAFE not set).
+
+- `sando -p … --mode yolo --json --deny-commands deny.json` refuses a matching Bash call before it runs, in every mode,
+  and never asks: the model gets "Refused by the deny list (--deny-commands): `git push origin main` matches the deny
+  pattern "git push*". … Do not retry". Checked first in resolveToolPermission (before rules, hooks, yolo) and again in
+  the Bash handler.
+- Same glob as opencode (copied from its binary): `*` anything, `?` one char, trailing ` *` optional, whole command.
+- Every command is checked on its own: `&& || ; |`, newlines, `( )`, `{ }`, if/for/while/case, functions, `$( )`,
+  backticks, `<( )`, `sh -c`/`bash -lc` strings, eval, heredoc/here-string into a shell, wrappers (env, sudo, timeout,
+  nohup, xargs, find -exec …), `VAR=…` prefixes, `/usr/bin/git`, `git -C x push`, `--request=POST`, `curl -sd`.
+- Shell scripts are read too (`bash push.sh`, `source f`, `./f` with a shell shebang); a script that does not exist
+  yet (written by the same line) refuses.
+- Fails safe: `$G push`, `curl $FLAGS`, `echo … | sh`, unparsable input, a bad deny file. Git only needs a literal
+  subcommand, so `git commit -m "$(cat msg)"` still runs. The `js` REPL tool is off while a list is active.
+- The CLI reads the file once (missing/invalid/empty: exit 1 before any model call) and passes the patterns as JSON
+  in SANDO_DENY_COMMANDS, so a Write to the file mid-run changes nothing.
+- Not covered (not a sandbox): `python -c` / `node -e`, non-shell scripts, git aliases.
+
+Tests [ran]: core 177/177 (133 in core/test/bash-deny-list.test.mjs: the Planner list, 69 refused forms, 34 allowed,
+27 chain/nesting forms, fail-safe, scripts); cli 59 = 56 pass + 3 live red-team skips (needs a model), incl. the new
+e2e cli/test/sando-deny-commands.e2e.test.mjs 3/3 (built CLI, headless yolo, stub model: `git push origin main` and
+`curl -d x http://x` refused and never reach the fake programs, `git status` runs; a control run without the flag
+executes all three). typecheck, lint, architecture:check OK.
+
+To enable (Chuck): merge this branch into `sando` → sando-rebuild/release; merge + deploy the Planner branch; set
+SANDO_LOCAL_ONLY_SAFE=1 for pp-server. Order matters: an old Sando exits on the unknown flag (fails closed).
+
 ## 2026-11-03: Board side pane — the Planner status board inside the Sando workbench (deployed, `1b809e4`)
 
 Chuck asked for Sando to have the status board too. It is live on sando-web. The branch is `fleet/sando-board-20261103`

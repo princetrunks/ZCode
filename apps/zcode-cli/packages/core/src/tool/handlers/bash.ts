@@ -111,7 +111,7 @@ async function executeBashHandler(
   const executionPort = context.executionPort;
 
   // Sando --deny-commands, second check at the point of execution: covers input rewritten after the permission step.
-  const denyRefusal = denyListRefusal("Bash", parsed);
+  const denyRefusal = denyListRefusal("Bash", parsed, context.workingDirectory);
   if (denyRefusal) {
     throw createCoreError(CoreErrorType.PermissionDenied, denyRefusal, {
       context: { toolCallId: context.toolCallId, toolName: "Bash" },

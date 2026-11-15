@@ -74,7 +74,9 @@ chain, pipeline, subshell, `$(…)`, `sh -c '…'` string and wrapper (`env`, `s
 checked on its own, `VAR=…` prefixes included. Fails safe: a run-time program name (`$G push`), an expanded argument to
 a listed program (`curl $FLAGS …`), a shell reading from a pipe, unparsable input or a bad file all refuse; the `js`
 REPL tool is off for the run. The file is read once at start (`SANDO_DENY_COMMANDS`), so editing it mid-run does
-nothing. Not a sandbox: `python -c` / `node -e` one-liners are not inspected. The Planner passes its local-only list
+nothing. Shell scripts are read too (`bash f.sh`, `source f`, `./f` with a shell shebang); one that does not exist
+yet at check time (written by the same line) refuses. Not a sandbox: `python -c` / `node -e` one-liners, non-shell
+scripts and git aliases are not inspected. The Planner passes its local-only list
 (LOCAL_ONLY_BASH_DENY). Code: `core/src/tool/handlers/bash-deny-list.ts`; tests: `core/test/bash-deny-list.test.mjs`,
 `cli/test/sando-deny-commands.e2e.test.mjs`.
 

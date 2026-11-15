@@ -17,7 +17,8 @@
  * an unreadable or invalid deny file all refuse. Not a sandbox: an interpreter one-liner (`python -c`, `node -e`)
  * can still open a socket; the lab's guarantee remains that its engine is a forge model.
  */
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
+import { isAbsolute, resolve } from "node:path";
 import { parse } from "unbash";
 import type { Command, Word, WordPart } from "unbash";
 
@@ -113,13 +114,25 @@ const WRAPPERS = new Set([
 const GIT_GLOBAL_WITH_VALUE = new Set(["-C", "-c", "--git-dir", "--work-tree", "--namespace", "--exec-path", "--super-prefix", "--config-env"]);
 const MAX_DEPTH = 6;
 
-/** Returns the first refused command, or null when every command in `commandLine` is allowed. */
-export function findDeniedCommand(commandLine: string, patterns: readonly string[]): DenyListMatch | null {
-  const guarded = guardedPrograms(patterns);
-  return checkScript(commandLine, patterns, guarded, 0);
+interface CheckContext {
+  readonly patterns: readonly string[];
+  readonly guarded: Guarded;
+  /** Where relative script paths resolve (`bash push.sh`, `./push.sh`). */
+  readonly cwd: string;
 }
 
-function checkScript(source: string, patterns: readonly string[], guarded: Guarded, depth: number): DenyListMatch | null {
+const MAX_SCRIPT_BYTES = 256 * 1024;
+
+/** Returns the first refused command, or null when every command in `commandLine` is allowed. */
+export function findDeniedCommand(
+  commandLine: string,
+  patterns: readonly string[],
+  cwd: string = process.cwd(),
+): DenyListMatch | null {
+  return checkScript(commandLine, { patterns, guarded: guardedPrograms(patterns), cwd }, 0);
+}
+
+function checkScript(source: string, ctx: CheckContext, depth: number): DenyListMatch | null {
   if (depth > MAX_DEPTH) return refuse(source, "nesting", "commands nested too deeply to check");
   if (source.trim().length === 0) return null;
   let script: ReturnType<typeof parse> & { errors?: unknown[] };
@@ -134,7 +147,7 @@ function checkScript(source: string, patterns: readonly string[], guarded: Guard
   const commands: Command[] = [];
   collectCommands(script, commands, new Set());
   for (const command of commands) {
-    const hit = checkCommand(source, command, patterns, guarded, depth);
+    const hit = checkCommand(source, command, ctx, depth);
     if (hit) return hit;
   }
   return null;
@@ -159,8 +172,7 @@ function collectCommands(node: unknown, out: Command[], seen: Set<object>): void
 function checkCommand(
   source: string,
   command: Command,
-  patterns: readonly string[],
-  guarded: Guarded,
+  ctx: CheckContext,
   depth: number,
 ): DenyListMatch | null {
   const text = source.slice(command.pos, command.end).trim();
@@ -174,7 +186,7 @@ function checkCommand(
   }
   argv[0] = name;
 
-  const guard = guarded.get(name);
+  const guard = ctx.guarded.get(name);
   if (guard !== undefined) {
     // "any": a pattern like `curl * -d*` can match on any argument; "subcommand": `git push*` only on the first one.
     const words = guard === "any" ? command.suffix : [subcommandWord(name, command.suffix)].filter(isWord);
@@ -198,7 +210,7 @@ function checkCommand(
   if (name === "git") addArgv(stripGitGlobalOptions(argv));
 
   for (const subject of subjects) {
-    const pattern = patterns.find((candidate) => matchesDenyPattern(subject, candidate));
+    const pattern = ctx.patterns.find((candidate) => matchesDenyPattern(subject, candidate));
     if (pattern) return refuse(text, pattern, `matches the deny pattern "${pattern}"`);
   }
 
@@ -206,8 +218,10 @@ function checkCommand(
   // The tail is re-parsed from the words as written, so quoting and expansions keep their meaning.
   if (WRAPPERS.has(name)) {
     for (let index = 0; index < command.suffix.length; index += 1) {
+      // An option or `.` (find's start dir) is never the wrapped program.
+      if (/^[-+.]/.test(wordValue(command.suffix[index]!)) && !wordValue(command.suffix[index]!).includes("/")) continue;
       const tail = command.suffix.slice(index).map((word) => word.text);
-      const hit = checkScript(tail.join(" "), patterns, guarded, depth + 1);
+      const hit = checkScript(tail.join(" "), ctx, depth + 1);
       if (hit) return { ...hit, command: text };
     }
   }
@@ -215,11 +229,26 @@ function checkCommand(
   // `sh -c "…"` / `bash -lc '…'` / `eval …`: the string is a script of its own.
   if (name === "eval") {
     if (command.suffix.some(wordHasExpansion)) return refuse(text, "dynamic-eval", "eval of an expanded string cannot be checked");
-    const hit = checkScript(argv.slice(1).join(" "), patterns, guarded, depth + 1);
+    const hit = checkScript(argv.slice(1).join(" "), ctx, depth + 1);
     if (hit) return { ...hit, command: text };
   }
+  // `source f` / `. f` run a file in this shell; `./f` / `dir/f` may be a script written earlier in the run.
+  if (name === "source" || name === ".") {
+    if (command.suffix[0] && wordHasExpansion(command.suffix[0])) {
+      return refuse(text, "dynamic-script", "a script path built from expansions cannot be checked");
+    }
+    if (argv[1]) {
+      const hit = checkScriptFile(text, argv[1], ctx, depth, { mustExist: true });
+      if (hit) return hit;
+    }
+  }
+  const typed = wordValue(command.name);
+  if (typed.includes("/") && !wordHasExpansion(command.name)) {
+    const hit = checkScriptFile(text, typed, ctx, depth, { mustExist: !isAbsolute(typed), shebangOnly: true });
+    if (hit) return hit;
+  }
   if (SHELLS.has(name)) {
-    const hit = checkShellInvocation(text, command, argv, patterns, guarded, depth);
+    const hit = checkShellInvocation(text, command, argv, ctx, depth);
     if (hit) return hit;
   }
   return null;
@@ -229,8 +258,7 @@ function checkShellInvocation(
   text: string,
   command: Command,
   argv: readonly string[],
-  patterns: readonly string[],
-  guarded: Guarded,
+  ctx: CheckContext,
   depth: number,
 ): DenyListMatch | null {
   let args = argv.slice(1);
@@ -245,21 +273,62 @@ function checkShellInvocation(
     if (scriptWord && wordHasExpansion(scriptWord)) {
       return refuse(text, "dynamic-shell", "a shell -c script built from expansions cannot be checked");
     }
-    const hit = checkScript(args[cIndex + 1] ?? "", patterns, guarded, depth + 1);
+    const hit = checkScript(args[cIndex + 1] ?? "", ctx, depth + 1);
     return hit ? { ...hit, command: text } : null;
   }
-  const scriptFile = args.find((arg) => !arg.startsWith("-") && !arg.startsWith("+"));
-  if (scriptFile !== undefined) return null;
+  const scriptIndex = args.findIndex(
+    (arg, index) => !arg.startsWith("-") && !arg.startsWith("+") && !/^[-+][oO]$/.test(args[index - 1] ?? ""),
+  );
+  if (scriptIndex >= 0) {
+    const scriptWord = command.suffix[scriptIndex + (argv[0] === "busybox" ? 1 : 0)];
+    if (scriptWord && wordHasExpansion(scriptWord)) {
+      return refuse(text, "dynamic-script", "a script path built from expansions cannot be checked");
+    }
+    return checkScriptFile(text, args[scriptIndex]!, ctx, depth, { mustExist: true });
+  }
   if (args.some((arg) => arg === "--version" || arg === "--help")) return null;
   // No -c and no script file: the shell reads its commands from stdin. A heredoc or here-string is checked as a
   // script; a pipe or file is unknown until run time.
   const stdin = command.redirects.find((redirect) => redirect.operator.startsWith("<<"));
   const body = stdin?.operator === "<<<" ? (stdin.target ? wordValue(stdin.target) : undefined) : stdin?.content;
   if (stdin && body !== undefined) {
-    const hit = checkScript(body, patterns, guarded, depth + 1);
+    const hit = checkScript(body, ctx, depth + 1);
     return hit ? { ...hit, command: text } : null;
   }
   return refuse(text, "shell-stdin", "a shell reading its commands from stdin cannot be checked (use sh -c '…')");
+}
+
+/**
+ * A script file is checked like a command line. `mustExist`: a missing file refuses (it may be written by an earlier
+ * command of the same line, after this check). `shellOnly`: only files with a shell shebang are read (`./run`).
+ */
+function checkScriptFile(
+  text: string,
+  file: string,
+  ctx: CheckContext,
+  depth: number,
+  options: { mustExist: boolean; shebangOnly?: boolean },
+): DenyListMatch | null {
+  const path = resolve(ctx.cwd, file);
+  if (!existsSync(path)) {
+    return options.mustExist ? refuse(text, "script-missing", `the script ${file} does not exist yet, so it cannot be checked`) : null;
+  }
+  let body: string;
+  try {
+    if (!statSync(path).isFile()) return null;
+    if (statSync(path).size > MAX_SCRIPT_BYTES) return refuse(text, "script-large", `the script ${file} is too large to check`);
+    body = readFileSync(path, "utf8");
+  } catch {
+    return refuse(text, "script-unreadable", `the script ${file} cannot be read, so it cannot be checked`);
+  }
+  if (options.shebangOnly) {
+    const shebang = /^#!\s*(\S+)(?:\s+(\S+))?/.exec(body);
+    if (!shebang) return null;
+    const interpreter = basename(shebang[1]!) === "env" ? (shebang[2] ?? "") : basename(shebang[1]!);
+    if (!SHELLS.has(interpreter)) return null;
+  }
+  const hit = checkScript(body.replace(/^#![^\n]*\n?/, ""), ctx, depth + 1);
+  return hit ? { ...hit, command: text, reason: `(script ${file}: \`${hit.command.slice(0, 120)}\`) ${hit.reason}` } : null;
 }
 
 /** The program's basename, or undefined when the name itself is decided at run time. */
@@ -372,7 +441,12 @@ const UNCHECKABLE_CODE_TOOLS = new Set(["js"]);
  * The refusal message for a tool call, or null when it may run. Only Bash commands are matched; while a deny list is
  * active the node REPL tool (`js`) is refused outright, since it can spawn processes the shell checks never see.
  */
-export function denyListRefusal(toolName: string, input: unknown, env: NodeJS.ProcessEnv = process.env): string | null {
+export function denyListRefusal(
+  toolName: string,
+  input: unknown,
+  cwd: string = process.cwd(),
+  env: NodeJS.ProcessEnv = process.env,
+): string | null {
   if (toolName !== "Bash" && !UNCHECKABLE_CODE_TOOLS.has(toolName)) return null;
   const list = activeDenyList(env);
   if (list === undefined) return null;
@@ -384,7 +458,7 @@ export function denyListRefusal(toolName: string, input: unknown, env: NodeJS.Pr
   }
   const command = (input as { command?: unknown } | null)?.command;
   if (typeof command !== "string") return null;
-  const hit = findDeniedCommand(command, list);
+  const hit = findDeniedCommand(command, list, cwd);
   if (!hit) return null;
   return (
     `Refused by the deny list (--deny-commands): \`${hit.command.slice(0, 300)}\` ${hit.reason}. ` +

@@ -2,6 +2,9 @@
 // (Project_Planner server/src/services/agentHarness.js LOCAL_ONLY_BASH_DENY + RSYNC_REMOTE_DENY, copied 2026-11-15).
 // Run: pnpm --filter @zcode/core test
 import { test } from "node:test";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import assert from "node:assert/strict";
 import {
   DENY_COMMANDS_ENV,
@@ -158,7 +161,6 @@ const ALLOWED = [
   "env NODE_ENV=test node script.js",
   "find . -name '*.ts' -exec grep -l deny {} +",
   "bash -c 'npm test && git status'",
-  "bash scripts/build.sh",
   "bash --version",
   "for f in a b; do echo $f; done",
   "\"$HOME/bin/tool\" --help",
@@ -238,14 +240,40 @@ test("deny file format: array or { deny }, non-empty strings only", () => {
 
 test("tool-call entry: only Bash is matched, js is off, a broken list refuses everything", () => {
   const env = { [DENY_COMMANDS_ENV]: JSON.stringify(LOCAL_ONLY_BASH_DENY) };
-  assert.match(denyListRefusal("Bash", { command: "git push" }, env), /Refused by the deny list \(--deny-commands\): `git push` matches the deny pattern "git push\*"/);
-  assert.equal(denyListRefusal("Bash", { command: "git status" }, env), null);
-  assert.equal(denyListRefusal("Read", { file_path: "/etc/hostname" }, env), null);
-  assert.match(denyListRefusal("js", { code: "1" }, env), /js tool is off/);
+  assert.match(denyListRefusal("Bash", { command: "git push" }, "/", env), /Refused by the deny list \(--deny-commands\): `git push` matches the deny pattern "git push\*"/);
+  assert.equal(denyListRefusal("Bash", { command: "git status" }, "/", env), null);
+  assert.equal(denyListRefusal("Read", { file_path: "/etc/hostname" }, "/", env), null);
+  assert.match(denyListRefusal("js", { code: "1" }, "/", env), /js tool is off/);
   // no list: nothing changes
-  assert.equal(denyListRefusal("Bash", { command: "git push" }, {}), null);
-  assert.equal(denyListRefusal("js", { code: "1" }, {}), null);
+  assert.equal(denyListRefusal("Bash", { command: "git push" }, "/", {}), null);
+  assert.equal(denyListRefusal("js", { code: "1" }, "/", {}), null);
   // set but broken: every shell call is refused
   assert.ok(activeDenyList({ [DENY_COMMANDS_ENV]: "[" }) instanceof Error);
-  assert.match(denyListRefusal("Bash", { command: "ls" }, { [DENY_COMMANDS_ENV]: "[" }), /No shell command can run/);
+  assert.match(denyListRefusal("Bash", { command: "ls" }, "/", { [DENY_COMMANDS_ENV]: "[" }), /No shell command can run/);
+});
+
+test("script files: a shell script, source, ./path with a shell shebang are read and checked", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "deny-scripts-"));
+  try {
+    fs.writeFileSync(path.join(dir, "push.sh"), "#!/bin/sh\nset -e\ncd repo && git push origin main\n");
+    fs.writeFileSync(path.join(dir, "ok.sh"), "#!/usr/bin/env bash\nnpm test\ngit status\n");
+    fs.writeFileSync(path.join(dir, "tool.py"), "#!/usr/bin/env python3\nprint('git push')\n");
+    fs.writeFileSync(path.join(dir, "inner.sh"), "bash push.sh\n");
+    const at = (cmd) => findDeniedCommand(cmd, LOCAL_ONLY_BASH_DENY, dir);
+    for (const cmd of ["bash push.sh", "sh ./push.sh", "bash -o pipefail push.sh", "source push.sh", ". ./push.sh", "./push.sh", "timeout 9 ./push.sh", "bash inner.sh"]) {
+      const hit = at(cmd);
+      assert.ok(hit, `${cmd} should be refused`);
+      assert.match(hit.reason, /script .*push\.sh/, cmd);
+    }
+    // written and run in the same line: the file is not there yet at check time
+    assert.equal(at("echo 'git push' > new.sh && bash new.sh")?.pattern, "script-missing");
+    assert.equal(at("echo 'git push' > n.sh; chmod +x n.sh; ./n.sh")?.pattern, "script-missing");
+    assert.equal(at('bash "$F"')?.pattern, "dynamic-script");
+    for (const cmd of ["bash ok.sh", "./ok.sh", "./tool.py", "/usr/bin/env ls", "source ok.sh"]) {
+      assert.equal(at(cmd), null, `${cmd} should run`);
+    }
+    assert.match(denyListRefusal("Bash", { command: "bash push.sh" }, dir, { [DENY_COMMANDS_ENV]: JSON.stringify(LOCAL_ONLY_BASH_DENY) }), /script push\.sh: `cd repo && git push origin main`|script push\.sh/);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });

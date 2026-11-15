@@ -52,7 +52,7 @@ export async function resolveToolPermission(
   telemetry?: ToolExecutionSpanWriter,
 ): Promise<ToolPermissionFlowResult> {
   // Sando --deny-commands: checked before rules, hooks and modes, so yolo / headless runs cannot skip it, and never asks.
-  const denyRefusal = denyListRefusal(toolCall.name, executionInput);
+  const denyRefusal = denyListRefusal(toolCall.name, executionInput, deps.getWorkingDirectory());
   if (denyRefusal) {
     telemetry?.setPermissionDecision("denied");
     await emitPermissionDenied(deps, toolCall, denyRefusal, traceContext);
