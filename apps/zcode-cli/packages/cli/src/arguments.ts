@@ -72,6 +72,7 @@ export const parseGlobalArgs = (argv: string[]) =>
       harness: { type: "string" },
       "max-turns": { type: "string" },
       "confine-to-cwd": { type: "boolean" },
+      "deny-commands": { type: "string" },
       verbose: {
         type: "boolean",
       },

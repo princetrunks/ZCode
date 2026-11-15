@@ -3,15 +3,19 @@
 //   --harness <dir>              <dir>/AGENTS.md + <dir>/skills + <dir>/agents, outside cwd   → ZCODE_HARNESS_DIR
 //   --max-turns <n>              model steps per user turn; the last one answers without tools → ZCODE_MAX_TURNS
 //   --confine-to-cwd             file tools refuse paths outside the workspace (+ harness dir) → ZCODE_CONFINE_TO_CWD
+//   --deny-commands <json file>  Bash commands matching a pattern are refused before they run → SANDO_DENY_COMMANDS (JSON)
+//                                (core/tool/handlers/bash-deny-list.ts; read and checked once, here)
 // The runtime runs in-process and reads these from the env, so they reach bootstrap, adapters and core tools alike.
 import { statSync } from "node:fs";
 import { resolve } from "node:path";
+import { DENY_COMMANDS_ENV, readDenyListFile } from "@zcode/core";
 
 export interface SandoRunFlagValues {
   model?: string | boolean;
   harness?: string | boolean;
   "max-turns"?: string | boolean;
   "confine-to-cwd"?: string | boolean;
+  "deny-commands"?: string | boolean;
 }
 
 /** Returns the env entries to set, or an error message for a bad value. */
@@ -48,5 +52,13 @@ export function resolveSandoRunFlags(
     env.ZCODE_MAX_TURNS = String(n);
   }
   if (values["confine-to-cwd"] === true) env.ZCODE_CONFINE_TO_CWD = "1";
+  if (typeof values["deny-commands"] === "string") {
+    const file = resolve(baseDir, values["deny-commands"]);
+    try {
+      env[DENY_COMMANDS_ENV] = JSON.stringify(readDenyListFile(file));
+    } catch (error) {
+      return { error: `--deny-commands: ${file}: ${error instanceof Error ? error.message : String(error)}` };
+    }
+  }
   return { env };
 }

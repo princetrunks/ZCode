@@ -65,6 +65,19 @@ sando -p "task…" --cwd /path/to/repo --mode yolo --json
 
 prints one JSON object; the answer is `response`, request count in `usage.modelRequestCount`.
 
+### `--deny-commands <json file>` (2026-11-15)
+
+A JSON array of opencode-style patterns (or `{ "deny": [...] }`): a Bash call is refused before it runs when any command
+in it matches, in every mode, headless included (it never asks; the model gets a "Refused by the deny list" tool error).
+Semantics are opencode's: `*` = anything, a trailing ` *` is optional, the whole command must match. Each command of a
+chain, pipeline, subshell, `$(…)`, `sh -c '…'` string and wrapper (`env`, `sudo`, `timeout`, `xargs`, `find -exec` …) is
+checked on its own, `VAR=…` prefixes included. Fails safe: a run-time program name (`$G push`), an expanded argument to
+a listed program (`curl $FLAGS …`), a shell reading from a pipe, unparsable input or a bad file all refuse; the `js`
+REPL tool is off for the run. The file is read once at start (`SANDO_DENY_COMMANDS`), so editing it mid-run does
+nothing. Not a sandbox: `python -c` / `node -e` one-liners are not inspected. The Planner passes its local-only list
+(LOCAL_ONLY_BASH_DENY). Code: `core/src/tool/handlers/bash-deny-list.ts`; tests: `core/test/bash-deny-list.test.mjs`,
+`cli/test/sando-deny-commands.e2e.test.mjs`.
+
 ## Planned additions
 
 - A Planner plugin (`.zcode-plugin/plugin.json` with `mcpServers` → the Planner's `/mcp`) so the Overseer tools

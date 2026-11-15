@@ -371,7 +371,7 @@ export const run = async (ctx: RunContext, deps: RunDependencies = {}): Promise<
     return 1;
   }
 
-  // Sando: --model / --harness / --max-turns / --confine-to-cwd travel as env vars into the in-process runtime.
+  // Sando: --model / --harness / --max-turns / --confine-to-cwd / --deny-commands travel as env vars into the in-process runtime.
   // Set them on process.env too: core tool path checks read the live process env, not the prepared copy.
   const runFlags = resolveSandoRunFlags(parsed.values, process.cwd());
   if ("error" in runFlags) {

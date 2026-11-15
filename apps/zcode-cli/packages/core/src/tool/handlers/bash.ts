@@ -43,6 +43,7 @@ import { supportsBashBackgroundLifecycle } from "./bash-background-lifecycle.js"
 import { isBashAutoBackgroundEligible } from "./bash-background-policy.js";
 import { resolveBashPermissionRulePolicy } from "./bash-command-permission-policy.js";
 import { decideBashCwdPolicy } from "./bash-cwd-policy.js";
+import { denyListRefusal } from "./bash-deny-list.js";
 import { readStringProperty } from "./bash-metadata.js";
 import { formatBashModelContent, formatPersistedBashModelContent } from "./bash-model-content.js";
 import {
@@ -108,6 +109,15 @@ async function executeBashHandler(
 ): Promise<BashOutput> {
   const parsed = BashInputSchema.parse(input) as BashInput;
   const executionPort = context.executionPort;
+
+  // Sando --deny-commands, second check at the point of execution: covers input rewritten after the permission step.
+  const denyRefusal = denyListRefusal("Bash", parsed);
+  if (denyRefusal) {
+    throw createCoreError(CoreErrorType.PermissionDenied, denyRefusal, {
+      context: { toolCallId: context.toolCallId, toolName: "Bash" },
+      recoverable: true,
+    });
+  }
 
   if (!executionPort) {
     throw createCoreError(

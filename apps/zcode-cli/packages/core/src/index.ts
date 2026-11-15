@@ -171,6 +171,9 @@ export type {
   RuntimeFactory,
 } from "./runtime.js";
 
+// Sando --deny-commands
+export { DENY_COMMANDS_ENV, readDenyListFile } from "./tool/handlers/bash-deny-list.js";
+
 // Output helpers
 export { color, formatJson, supportsColor } from "./output.js";
 

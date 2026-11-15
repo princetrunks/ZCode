@@ -34,6 +34,7 @@ import { summarizeInput } from "./utils.js";
 import { validateInput } from "./validation.js";
 import { applyMemoryFilePermission } from "./memory-file-permission.js";
 import { shadowClassifyToolCall } from "../handlers/bash-shadow-classifier.js";
+import { denyListRefusal } from "../handlers/bash-deny-list.js";
 
 type ToolPermissionFlowResult =
   | { allowed: true; executionInput: unknown; permissionWaitMs?: number }
@@ -50,6 +51,28 @@ export async function resolveToolPermission(
   signal?: AbortSignal,
   telemetry?: ToolExecutionSpanWriter,
 ): Promise<ToolPermissionFlowResult> {
+  // Sando --deny-commands: checked before rules, hooks and modes, so yolo / headless runs cannot skip it, and never asks.
+  const denyRefusal = denyListRefusal(toolCall.name, executionInput);
+  if (denyRefusal) {
+    telemetry?.setPermissionDecision("denied");
+    await emitPermissionDenied(deps, toolCall, denyRefusal, traceContext);
+    deps.logger?.warn("Tool call refused by the deny list", {
+      ...traceContextToLogContext(traceContext),
+      event: "tool.permission.denied",
+      mode,
+      module: "core.tool.executor",
+      reason: denyRefusal,
+      ruleId: "sando-deny-commands",
+      status: "failed",
+      toolCallId: toolCall.id,
+      toolName: toolCall.name,
+    });
+    return {
+      allowed: false,
+      result: createPermissionErrorResult(toolCall, denyRefusal, { decision: "deny", mode, ruleId: "sando-deny-commands" }),
+    };
+  }
+
   const permissionContext: PermissionContext = {
     toolName: toolCall.name,
     input: executionInput,

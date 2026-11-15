@@ -47,3 +47,19 @@ test("bad values are errors", () => {
     assert.ok("error" in resolveSandoRunFlags(values, "/"), JSON.stringify(values));
   }
 });
+
+test("--deny-commands: the file is read once and passed as JSON; a bad file is an error", async () => {
+  const fs = await import("node:fs");
+  const path = await import("node:path");
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "sando-deny-flag-"));
+  fs.writeFileSync(path.join(dir, "deny.json"), JSON.stringify(["git push*", "ssh *"]));
+  assert.deepEqual(resolveSandoRunFlags({ "deny-commands": "deny.json" }, dir), {
+    env: { SANDO_DENY_COMMANDS: JSON.stringify(["git push*", "ssh *"]) },
+  });
+  fs.writeFileSync(path.join(dir, "empty.json"), "[]");
+  for (const file of ["missing.json", "empty.json"]) {
+    const r = resolveSandoRunFlags({ "deny-commands": file }, dir);
+    assert.ok("error" in r && r.error.startsWith("--deny-commands:"), file);
+  }
+  fs.rmSync(dir, { recursive: true, force: true });
+});
