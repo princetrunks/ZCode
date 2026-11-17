@@ -302,6 +302,7 @@ export {
   maybeLocalMicrocompactMessages,
   shouldAutoCompact,
   buildDefaultMicrocompactThreshold,
+  toolResultPrunerEnabledFromEnv,
 } from "../compact/index.js";
 export type { AutoCompactPolicyConfig } from "../compact/index.js";
 export type { AutoCompactTokenOverride } from "../compact/index.js";

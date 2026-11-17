@@ -114,7 +114,11 @@ export function maybeLocalMicrocompactRuntimeEntries(input: {
   }
 
   const entries = [...input.entries];
-  const clearedToolCallIds = new Set<string>(result.payload.clearedToolCallIds);
+  // 被清除和被裁剪（Sando pruner）的 tool result 都要把新内容写回 runtime entry。
+  const clearedToolCallIds = new Set<string>([
+    ...result.payload.clearedToolCallIds,
+    ...(result.payload.prunedToolCallIds ?? []),
+  ]);
   const clearedContentByToolCallId = new Map(
     result.messages
       .filter(

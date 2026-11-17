@@ -8,6 +8,12 @@ import {
 } from "@zcode/contracts";
 import type { CompactModelMessage } from "./manual.js";
 import { estimateMessageTokens } from "./manual.js";
+import {
+  pruneToolResultContent,
+  resolveToolResultPrunerConfig,
+  type ResolvedToolResultPrunerConfig,
+  type ToolResultPrunerConfig,
+} from "./tool-result-pruner.js";
 
 export const MICROCOMPACT_CLEARED_TOOL_RESULT_PREFIX = "[Old tool result content cleared]";
 export const MICROCOMPACT_CLEARED_TOOL_RESULT_MESSAGE = "[Old tool result content cleared]";
@@ -36,6 +42,8 @@ export interface LocalMicrocompactPolicyConfig {
   compactableToolNames?: readonly string[];
   clearErrorResults?: boolean;
   minTokenSavings?: number;
+  /** Sando: trim old tool results to head + tail first (tool-result-pruner.ts); runs even when clearing is off. */
+  pruner?: ToolResultPrunerConfig;
 }
 
 export interface LocalMicrocompactMessage extends CompactModelMessage {
@@ -91,7 +99,9 @@ export function maybeLocalMicrocompactMessages<T extends LocalMicrocompactMessag
   const estimatedTokenCount = estimateMessageTokens(messages);
   const thresholdTokens = positiveInt(config.thresholdTokens);
 
-  if (config.enabled === false) {
+  const pruner = resolveToolResultPrunerConfig(config.pruner);
+  const clearEnabled = config.enabled !== false;
+  if (!clearEnabled && !pruner) {
     return {
       decision: { estimatedTokenCount, reason: "disabled", thresholdTokens },
       messages,
@@ -112,33 +122,29 @@ export function maybeLocalMicrocompactMessages<T extends LocalMicrocompactMessag
     };
   }
 
-  const candidateGroups = collectCompactableToolResultGroups(messages, config);
-  if (candidateGroups.length === 0) {
+  const prunerGroups = pruner
+    ? collectCompactableToolResultGroups(messages, { ...config, clearErrorResults: true })
+    : [];
+  const clearGroups = clearEnabled ? collectCompactableToolResultGroups(messages, config) : [];
+  if (prunerGroups.length === 0 && clearGroups.length === 0) {
     return {
       decision: { estimatedTokenCount, reason: "no_candidates", thresholdTokens, trigger },
       messages,
     };
   }
 
-  const keepCount =
-    positiveInt(config.keepRecentToolResults) ?? DEFAULT_MICROCOMPACT_KEEP_RECENT_TOOL_RESULTS;
-  const boundedKeepCount = Math.max(1, keepCount);
-  const clearGroupCount = Math.max(0, candidateGroups.length - boundedKeepCount);
-  if (clearGroupCount === 0) {
+  const pruned = pruner ? pruneOldToolResults(messages, prunerGroups, pruner) : [];
+  // 裁剪后仍在压力线以上（或空闲触发）时，才退回到上游的整段清除。
+  const stillOverThreshold =
+    trigger === MicrocompactTrigger.TimeBased ||
+    thresholdTokens === undefined ||
+    estimateMessageTokens(messages) >= thresholdTokens;
+  const cleared =
+    clearEnabled && stillOverThreshold ? clearOldToolResults(messages, config) : undefined;
+  if (pruned.length === 0 && (!cleared || cleared.toClear.length === 0)) {
     return {
       decision: { estimatedTokenCount, reason: "nothing_to_clear", thresholdTokens, trigger },
-      messages,
-    };
-  }
-
-  const toClear = candidateGroups.slice(0, clearGroupCount).flat();
-  const toKeep = candidateGroups.slice(clearGroupCount).flat();
-  for (const candidate of toClear) {
-    const message = messages[candidate.index];
-    if (!message) continue;
-    messages[candidate.index] = {
-      ...message,
-      content: buildClearedToolResultContent(),
+      messages: input.messages.map(cloneLocalMicrocompactMessage),
     };
   }
 
@@ -152,20 +158,76 @@ export function maybeLocalMicrocompactMessages<T extends LocalMicrocompactMessag
     };
   }
 
+  const toClear = cleared?.toClear ?? [];
+  const clearedIds = new Set(toClear.map((candidate) => candidate.toolCallId));
+  const keptToolCallIds =
+    cleared?.toKeep.map((candidate) => candidate.toolCallId) ??
+    prunerGroups
+      .flat()
+      .map((candidate) => candidate.toolCallId)
+      .filter((id) => !clearedIds.has(id) && !pruned.includes(id));
+  const prunedStillVisible = pruned.filter((id) => !clearedIds.has(id));
   return {
     decision: { estimatedTokenCount, reason: "applied", thresholdTokens, trigger },
     messages,
     payload: {
       clearedMessageCount: toClear.length,
       clearedToolCallIds: toClear.map((candidate) => candidate.toolCallId as ToolCallId),
-      keptToolCallIds: toKeep.map((candidate) => candidate.toolCallId as ToolCallId),
+      keptToolCallIds: keptToolCallIds as ToolCallId[],
       postMicrocompactTokenCount: postTokenCount,
       preMicrocompactTokenCount: estimatedTokenCount,
-      strategy: MicrocompactStrategy.LocalToolResultClear,
+      ...(prunedStillVisible.length > 0
+        ? { prunedToolCallIds: prunedStillVisible as ToolCallId[] }
+        : {}),
+      strategy:
+        prunedStillVisible.length > 0
+          ? MicrocompactStrategy.LocalToolResultPrune
+          : MicrocompactStrategy.LocalToolResultClear,
       tokensSaved,
       trigger,
     },
   };
+}
+
+/** Trims every old tool result over the threshold in place; returns the pruned tool call ids. */
+function pruneOldToolResults<T extends LocalMicrocompactMessage>(
+  messages: T[],
+  groups: ToolResultCandidate[][],
+  pruner: ResolvedToolResultPrunerConfig,
+): string[] {
+  const oldGroupCount = Math.max(0, groups.length - pruner.keepRecentToolResults);
+  const pruned: string[] = [];
+  for (const candidate of groups.slice(0, oldGroupCount).flat()) {
+    const message = messages[candidate.index];
+    if (!message) continue;
+    const content = pruneToolResultContent(message.content, pruner);
+    if (content === undefined) continue;
+    messages[candidate.index] = { ...message, content };
+    pruned.push(candidate.toolCallId);
+  }
+  return pruned;
+}
+
+/** Upstream microcompact: replaces all but the newest groups with the cleared marker, in place. */
+function clearOldToolResults<T extends LocalMicrocompactMessage>(
+  messages: T[],
+  config: LocalMicrocompactPolicyConfig,
+): { toClear: ToolResultCandidate[]; toKeep: ToolResultCandidate[] } {
+  const candidateGroups = collectCompactableToolResultGroups(messages, config);
+  const keepCount =
+    positiveInt(config.keepRecentToolResults) ?? DEFAULT_MICROCOMPACT_KEEP_RECENT_TOOL_RESULTS;
+  const clearGroupCount = Math.max(0, candidateGroups.length - Math.max(1, keepCount));
+  const toClear = candidateGroups.slice(0, clearGroupCount).flat();
+  const toKeep = candidateGroups.slice(clearGroupCount).flat();
+  for (const candidate of toClear) {
+    const message = messages[candidate.index];
+    if (!message) continue;
+    messages[candidate.index] = {
+      ...message,
+      content: buildClearedToolResultContent(),
+    };
+  }
+  return { toClear, toKeep };
 }
 
 function resolveMicrocompactTrigger(input: {

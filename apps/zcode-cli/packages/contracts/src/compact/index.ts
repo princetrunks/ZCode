@@ -25,6 +25,8 @@ export type MicrocompactTrigger = (typeof MicrocompactTrigger)[keyof typeof Micr
 
 export const MicrocompactStrategy = {
   LocalToolResultClear: "local_tool_result_clear",
+  // Sando: old tool results trimmed to head + tail (prunedToolCallIds); clearing may follow as fallback.
+  LocalToolResultPrune: "local_tool_result_prune",
 } as const;
 
 export type MicrocompactStrategy = (typeof MicrocompactStrategy)[keyof typeof MicrocompactStrategy];
@@ -238,13 +240,17 @@ export type CompactBoundaryPayload = Omit<
 export const microcompactBoundaryPayloadSchema = z
   .object({
     trigger: z.enum([MicrocompactTrigger.TimeBased, MicrocompactTrigger.TokenPressure]),
-    strategy: z.enum([MicrocompactStrategy.LocalToolResultClear]),
+    strategy: z.enum([
+      MicrocompactStrategy.LocalToolResultClear,
+      MicrocompactStrategy.LocalToolResultPrune,
+    ]),
     preMicrocompactTokenCount: z.number().int().nonnegative(),
     postMicrocompactTokenCount: z.number().int().nonnegative(),
     tokensSaved: z.number().int().nonnegative(),
     clearedToolCallIds: z.array(z.string().min(1)),
     keptToolCallIds: z.array(z.string().min(1)),
     clearedMessageCount: z.number().int().nonnegative(),
+    prunedToolCallIds: z.array(z.string().min(1)).optional(),
     traceId: z.string().min(1),
     turnId: z.string().min(1).optional(),
   })
@@ -252,10 +258,11 @@ export const microcompactBoundaryPayloadSchema = z
 
 export type MicrocompactBoundaryPayload = Omit<
   z.infer<typeof microcompactBoundaryPayloadSchema>,
-  "clearedToolCallIds" | "keptToolCallIds" | "traceId" | "turnId"
+  "clearedToolCallIds" | "keptToolCallIds" | "prunedToolCallIds" | "traceId" | "turnId"
 > & {
   clearedToolCallIds: ToolCallId[];
   keptToolCallIds: ToolCallId[];
+  prunedToolCallIds?: ToolCallId[];
   traceId: TraceId;
   turnId?: TurnId;
 };

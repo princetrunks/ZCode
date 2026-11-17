@@ -3,6 +3,7 @@ import {
   SessionEventType,
   buildDefaultMicrocompactThreshold,
   getAutoCompactThreshold,
+  toolResultPrunerEnabledFromEnv,
   traceContextToLogContext,
 } from "../deps.js";
 import type {
@@ -92,6 +93,8 @@ export async function microcompactIfNeeded(
     ...traceContextToLogContext(turnTraceContext),
     clearedMessageCount: payload.clearedMessageCount,
     event: "compact.micro.applied",
+    prunedMessageCount: payload.prunedToolCallIds?.length ?? 0,
+    strategy: payload.strategy,
     modelStepIndex: context.modelStepIndex,
     module: "core.runtime",
     phase: context.phase,
@@ -109,6 +112,11 @@ function resolveLocalMicrocompactConfig(
   return {
     ...config.microcompact,
     enabled: config.microcompact?.enabled === true,
+    // Sando: head + tail pruning of old tool results is on unless SANDO_TOOL_RESULT_PRUNER=off.
+    pruner: {
+      ...config.microcompact?.pruner,
+      enabled: config.microcompact?.pruner?.enabled ?? toolResultPrunerEnabledFromEnv(),
+    },
     thresholdTokens:
       config.microcompact?.thresholdTokens ??
       buildDefaultMicrocompactThreshold(fullCompactThreshold),

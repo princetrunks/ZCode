@@ -37,6 +37,13 @@ export {
   buildDefaultMicrocompactThreshold,
   maybeLocalMicrocompactMessages,
 } from "./microcompact.js";
+export {
+  TOOL_RESULT_PRUNER_ENV,
+  pruneToolResultContent,
+  resolveToolResultPrunerConfig,
+  toolResultPrunerEnabledFromEnv,
+} from "./tool-result-pruner.js";
+export type { ToolResultPrunerConfig } from "./tool-result-pruner.js";
 export type {
   BuildManualCompactBoundaryInput,
   CompactModelMessage,
