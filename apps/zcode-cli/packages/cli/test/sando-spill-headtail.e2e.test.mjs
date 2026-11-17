@@ -38,7 +38,10 @@ function writeProviderConfig(contextWindow) {
               config: {
                 group: "standard-personal",
                 access: { type: "api-key", apiKey: "fake" },
-                api: { type: "openai-chat-completions", baseUrl: `http://127.0.0.1:${fake.port}/v1` },
+                api: {
+                  type: "openai-chat-completions",
+                  baseUrl: `http://127.0.0.1:${fake.port}/v1`,
+                },
                 personalModelIds: ["model-a"],
                 modelOrder: ["model-a"],
               },
@@ -95,7 +98,8 @@ async function sando(steps, extraEnv = {}) {
       : null;
   };
   const env = { ...process.env, HOME: home, SANDO_PROMPT_PROFILE: "lean", ...extraEnv };
-  for (const k of ["ZCODE_MODEL", "ZCODE_HARNESS_DIR", "ZCODE_MAX_TURNS", "ZCODE_CONFINE_TO_CWD"]) delete env[k];
+  for (const k of ["ZCODE_MODEL", "ZCODE_HARNESS_DIR", "ZCODE_MAX_TURNS", "ZCODE_CONFINE_TO_CWD"])
+    delete env[k];
   if (!("SANDO_TOOL_RESULT_PRUNER" in extraEnv)) delete env.SANDO_TOOL_RESULT_PRUNER;
   const child = spawn(process.execPath, [CLI, "-p", "run the steps", "--mode", "yolo", "--json"], {
     cwd: ws,
@@ -140,7 +144,8 @@ test("pruner (32k window): old results are trimmed to head + tail and keep their
     assert.match(t, new RegExp(`E_STEP${k + 1}_END`), `result ${k + 1} keeps its last line`);
     assert.doesNotMatch(t, /Old tool result content cleared/);
   }
-  for (const t of last.slice(-2)) assert.doesNotMatch(t, /chars pruned/, "newest two are untouched");
+  for (const t of last.slice(-2))
+    assert.doesNotMatch(t, /chars pruned/, "newest two are untouched");
 });
 
 test("SANDO_TOOL_RESULT_PRUNER=off: same run, nothing is pruned (upstream behaviour)", async () => {
@@ -151,4 +156,12 @@ test("SANDO_TOOL_RESULT_PRUNER=off: same run, nothing is pruned (upstream behavi
   for (const q of r.requests) {
     for (const t of toolTexts(q)) assert.doesNotMatch(t, /chars pruned from this old tool result/);
   }
+});
+
+test("SANDO_TOOL_RESULT_PRUNER with an unknown value fails at startup, before any model request", async () => {
+  writeProviderConfig(32768);
+  const r = await sando([midLog(1)], { SANDO_TOOL_RESULT_PRUNER: "maybe" });
+  assert.notEqual(r.status, 0);
+  assert.match(r.stderr, /SANDO_TOOL_RESULT_PRUNER expects on or off/);
+  assert.equal(r.requests.length, 0);
 });
