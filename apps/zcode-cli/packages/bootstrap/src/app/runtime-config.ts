@@ -6,6 +6,7 @@ import {
   type ModelSelectionOptions,
 } from "@zcode/provider";
 import {
+  compactHeadroomModeFromEnv,
   parsePromptProfileSetting,
   resolveBashTimeoutPolicy,
   toolResultPrunerEnabledFromEnv,
@@ -289,6 +290,8 @@ function resolvePromptProfile(options: ZCodeAppOptions): Pick<AgentRuntimeConfig
   // Sando: SANDO_TOOL_RESULT_PRUNER=on|off (SANDO-SPILL-PRUNER.md) is read per model step; a bad value fails here,
   // at startup, instead of in the middle of a turn.
   toolResultPrunerEnabledFromEnv(options.env ?? process.env);
+  // Same for SANDO_COMPACT_HEADROOM=auto|upstream (SANDO-COMPACT-HEADROOM.md).
+  compactHeadroomModeFromEnv(options.env ?? process.env);
   const promptProfile =
     options.runtimeConfig?.promptProfile ??
     parsePromptProfileSetting((options.env ?? process.env).SANDO_PROMPT_PROFILE);

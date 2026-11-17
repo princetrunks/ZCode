@@ -295,6 +295,7 @@ export {
   createCompactBoundaryId,
   estimateMessageTokens,
   formatCompactSummary,
+  compactHeadroomModeFromEnv,
   getAutoCompactThreshold,
   getMessagesToSummarize,
   getUsageTotalTokens,

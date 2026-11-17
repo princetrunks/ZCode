@@ -101,6 +101,7 @@ async function sando(steps, extraEnv = {}) {
   for (const k of ["ZCODE_MODEL", "ZCODE_HARNESS_DIR", "ZCODE_MAX_TURNS", "ZCODE_CONFINE_TO_CWD"])
     delete env[k];
   if (!("SANDO_TOOL_RESULT_PRUNER" in extraEnv)) delete env.SANDO_TOOL_RESULT_PRUNER;
+  if (!("SANDO_COMPACT_HEADROOM" in extraEnv)) delete env.SANDO_COMPACT_HEADROOM;
   const child = spawn(process.execPath, [CLI, "-p", "run the steps", "--mode", "yolo", "--json"], {
     cwd: ws,
     env,
@@ -134,7 +135,9 @@ test("spill: a 60k-char Bash log whose error is on the last line shows that line
 test("pruner (32k window): old results are trimmed to head + tail and keep their error line; newest 2 intact", async () => {
   writeProviderConfig(32768);
   const steps = [1, 2, 3, 4, 5].map(midLog);
-  const r = await sando(steps);
+  // Sized for the upstream 32k trigger (pruner from ~9.6k tokens); Sando's per-model headroom
+  // (SANDO-COMPACT-HEADROOM.md) moves it to ~19.4k, so this mechanism test pins the upstream trigger.
+  const r = await sando(steps, { SANDO_COMPACT_HEADROOM: "upstream" });
   assert.equal(r.status, 0, r.stderr);
   const last = toolTexts(r.requests.at(-1));
   assert.equal(last.length, 5);
@@ -151,7 +154,7 @@ test("pruner (32k window): old results are trimmed to head + tail and keep their
 test("SANDO_TOOL_RESULT_PRUNER=off: same run, nothing is pruned (upstream behaviour)", async () => {
   writeProviderConfig(32768);
   const steps = [1, 2, 3, 4, 5].map(midLog);
-  const r = await sando(steps, { SANDO_TOOL_RESULT_PRUNER: "off" });
+  const r = await sando(steps, { SANDO_TOOL_RESULT_PRUNER: "off", SANDO_COMPACT_HEADROOM: "upstream" });
   assert.equal(r.status, 0, r.stderr);
   for (const q of r.requests) {
     for (const t of toolTexts(q)) assert.doesNotMatch(t, /chars pruned from this old tool result/);

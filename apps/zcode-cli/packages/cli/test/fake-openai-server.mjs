@@ -6,10 +6,18 @@
 // A function scenario gets ({ msgs, tools, lastTool }) and returns null (answer) or { name, args } (one tool call).
 // Reasoning e2e: a handler decision may carry `reasoning` (streamed as `reasoning_content` before the answer or
 // the tool calls); every request also keeps its raw `messages` array as `rawMessages`.
+// `state.realisticUsage` (compaction e2e): usage.prompt_tokens = request chars / 4 instead of a constant 10.
 import http from "node:http";
 
 export function startFakeOpenAI() {
-  const state = { scenario: "text", requests: [], handler: null, inflight: 0, peakInflight: 0 };
+  const state = {
+    scenario: "text",
+    requests: [],
+    handler: null,
+    inflight: 0,
+    peakInflight: 0,
+    realisticUsage: false,
+  };
   const server = http.createServer((req, res) => {
     let body = "";
     req.on("data", (c) => (body += c));
@@ -64,6 +72,8 @@ export function startFakeOpenAI() {
         if (call) calls = [{ name: "Read", args: call }];
       }
       const call = calls.length > 0;
+      const promptTokens = state.realisticUsage ? Math.ceil(body.length / 4) : 10;
+      const usage = { prompt_tokens: promptTokens, completion_tokens: 5, total_tokens: promptTokens + 5 };
       const toolCalls = calls.map((c, i) => ({
         id: `t${n}_${i}`,
         type: "function",
@@ -82,7 +92,7 @@ export function startFakeOpenAI() {
             object: "chat.completion",
             model: j.model,
             choices: [{ index: 0, message, finish_reason: call ? "tool_calls" : "stop" }],
-            usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
+            usage,
           }),
         );
         return;
@@ -109,7 +119,7 @@ export function startFakeOpenAI() {
         object: "chat.completion.chunk",
         model: j.model,
         choices: [],
-        usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
+        usage,
       });
       res.write("data: [DONE]\n\n");
       res.end();

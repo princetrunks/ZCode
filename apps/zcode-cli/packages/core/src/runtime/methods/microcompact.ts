@@ -15,7 +15,7 @@ import type {
 } from "../deps.js";
 import { maybeLocalMicrocompactRuntimeEntries, throwIfTurnAborted } from "../helpers/index.js";
 import type { AgentRuntimeInternal } from "../internal.js";
-import { resolveNormalRequestMaxOutputTokens } from "./model-token-limits.js";
+import { buildAutoCompactPolicyConfig } from "./auto-compact-config.js";
 import type { TurnRequestState } from "./turn-loop-state.js";
 import {
   filterOutputTokenContinuationEntries,
@@ -37,14 +37,7 @@ export async function microcompactIfNeeded(
   if (this.config.compact?.enabled === false) return;
   throwIfTurnAborted(abortSignal);
 
-  const autoConfig: AutoCompactPolicyConfig = {
-    contextWindow: context.model.properties.contextWindow,
-    ...this.config.compact,
-    maxOutputTokens: resolveNormalRequestMaxOutputTokens({
-      modelMaxOutputTokens: context.model.optionSpecs.maxOutputTokens.max,
-    }),
-    modelContextBudgetStrategy: this.config.modelContextBudgetStrategy,
-  };
+  const autoConfig = buildAutoCompactPolicyConfig(this, context.model);
   const microcompactConfig = resolveLocalMicrocompactConfig(autoConfig);
   const useMidConversationSystem =
     this.config.midConversationSystem?.mode === "force" ||

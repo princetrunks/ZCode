@@ -23,6 +23,10 @@ export {
   MAX_OUTPUT_TOKENS_FOR_SUMMARY,
   getAutoCompactOutputReserveTokens,
   getAutoCompactThreshold,
+  getAutoCompactHeadroomTokens,
+  compactHeadroomModeFromEnv,
+  defaultCompactHeadroomTokens,
+  COMPACT_HEADROOM_ENV,
   getEffectiveContextWindowSize,
   shouldAutoCompact,
 } from "./policy.js";
@@ -49,7 +53,7 @@ export type {
   CompactModelMessage,
   TokenUsageLike,
 } from "./manual.js";
-export type { AutoCompactDecision, AutoCompactPolicyConfig } from "./policy.js";
+export type { AutoCompactDecision, AutoCompactPolicyConfig, CompactHeadroomMode } from "./policy.js";
 export type { AutoCompactTokenOverride, AutoCompactTokenSource } from "./policy.js";
 export type {
   LocalMicrocompactBoundaryPayload,
