@@ -140,6 +140,10 @@ export interface BashOutput {
    */
   stdoutTruncated?: boolean;
   /**
+   * Sando: the last bytes of the output file when stdout was truncated (stdout holds the head only)
+   */
+  stdoutTail?: string;
+  /**
    * Whether stderr was truncated for inline return
    */
   stderrTruncated?: boolean;
@@ -237,6 +241,7 @@ export const BashOutputSchema = z
     timedOut: z.boolean().optional(),
     cancelled: z.boolean().optional(),
     stdoutTruncated: z.boolean().optional(),
+    stdoutTail: z.string().optional(),
     stderrTruncated: z.boolean().optional(),
     stdoutBytes: z.number().int().nonnegative().optional(),
     stderrBytes: z.number().int().nonnegative().optional(),

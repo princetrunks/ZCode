@@ -83,6 +83,9 @@ export async function toBashOutput(
       timedOut: result.timedOut,
       cancelled: result.cancelled,
       stdoutTruncated: result.stdout.truncated,
+      ...(result.stdout.truncated && result.stdout.tailText
+        ? { stdoutTail: result.stdout.tailText }
+        : {}),
       stderrTruncated: result.stderr.truncated,
       stdoutBytes: result.stdout.bytes,
       stderrBytes: result.stderr.bytes,

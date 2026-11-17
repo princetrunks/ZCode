@@ -83,6 +83,7 @@ function formatStdoutContentForModel(result: BashOutput): string {
       content: processedStdout,
       originalBytes: observedOutputBytes(result),
       persistedPath: persistedOutputPath,
+      tailContent: result.stdoutTruncated ? result.stdoutTail?.trimEnd() : undefined,
     });
   }
   return processedStdout;
@@ -164,6 +165,7 @@ function formatBashPersistedOutputContent(input: {
   content: string;
   originalBytes: number;
   persistedPath: string;
+  tailContent?: string;
 }): string {
   return formatPersistedOutputEnvelope({
     content: input.content,
@@ -171,6 +173,7 @@ function formatBashPersistedOutputContent(input: {
     originalBytes: input.originalBytes,
     persistedPath: input.persistedPath,
     previewChars: MODEL_RESULT_PREVIEW_CHARS,
+    tailContent: input.tailContent,
   });
 }
 

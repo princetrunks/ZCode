@@ -9,6 +9,9 @@ import type { ExecutionStreamResult, ExecutionOutputPreview } from "@zcode/contr
 const OUTPUT_WATCH_INTERVAL_MS = 5_000;
 const OUTPUT_FILE_MODE = 0o600;
 const PROGRESS_TAIL_MAX_BYTES = 4096;
+// Sando: a truncated result also carries the file's last bytes, so the model-visible preview can show the end of
+// the log (where build/test errors are) and not only the head that fits the inline budget.
+const RESULT_TAIL_MAX_BYTES = 4096;
 
 /** Bash 只持有文件身份和观察器；原始输出由子进程写入，不经过 Node collector。 */
 export class BashFileOutput {
@@ -138,7 +141,9 @@ export class BashFileOutput {
         false,
         this.legacyEncoding,
       );
-      return result;
+      if (!result.truncated) return result;
+      const tail = await readBashOutput(this.path, RESULT_TAIL_MAX_BYTES, true, this.legacyEncoding);
+      return { ...result, tailText: tail.text };
     } catch (error) {
       const code = error instanceof Error && "code" in error ? String(error.code) : "unknown";
       return {

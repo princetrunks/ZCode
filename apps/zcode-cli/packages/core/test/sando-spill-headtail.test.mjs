@@ -107,6 +107,25 @@ test("spill: rest that fits in the tail budget is shown in full (nothing to omit
   assert.ok(!out.includes("omitted"));
 });
 
+test("spill: tailContent (Bash: head inline, rest in the file) supplies the real end; the gap is counted in bytes", () => {
+  const full = buildLog(100_000);
+  const inlineHead = full.slice(0, 30_000); // what Bash keeps inline
+  const fileTail = full.slice(-4_096); // what the adapter reads from the end of the file
+  const out = formatPersistedOutputEnvelope({
+    content: inlineHead,
+    formatBytes: (n) => `${n} B`,
+    originalBytes: Buffer.byteLength(full),
+    persistedPath: "/p",
+    previewChars: 2_000,
+    tailContent: fileTail,
+  });
+  assert.ok(out.includes(ERROR_LINE), "the real last line, not the end of the inline head");
+  const omitted = Number(/… (\d+) B omitted …/.exec(out)[1]);
+  const [head, tail] = out.split("\n").slice(4, -1).join("\n").split(/\n… \d+ B omitted …\n/);
+  assert.equal(head.length + omitted + tail.length, full.length);
+  assert.ok(full.endsWith(tail));
+});
+
 // ---------- pruner primitives ----------
 
 const prunerOn = resolveToolResultPrunerConfig({ enabled: true });

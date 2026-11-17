@@ -177,6 +177,8 @@ export interface ExecutionStreamResult {
   artifactPath?: string;
   artifactBytes?: number;
   artifactTruncated?: boolean;
+  /** Sando: the stream's last bytes when `truncated` (text holds the head), for head + tail previews. */
+  tailText?: string;
 }
 
 export interface ExecutionResult {

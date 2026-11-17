@@ -15,6 +15,11 @@ interface PersistedOutputEnvelopeInput {
   previewChars: number;
   /** Chars kept from the end of the output; defaults to PERSISTED_OUTPUT_PREVIEW_TAIL_CHARS. */
   tailChars?: number;
+  /**
+   * The real end of the output when `content` holds only its head (Bash keeps the first bytes inline and the rest
+   * in the file); the tail is cut from here and the gap is counted in bytes against `originalBytes`.
+   */
+  tailContent?: string;
 }
 
 export function formatGenericPersistedOutputContent(input: {
@@ -33,7 +38,10 @@ export function formatGenericPersistedOutputContent(input: {
 
 export function formatPersistedOutputEnvelope(input: PersistedOutputEnvelopeInput): string {
   const tailChars = input.tailChars ?? PERSISTED_OUTPUT_PREVIEW_TAIL_CHARS;
-  const preview = previewHeadAndTail(input.content, input.previewChars, tailChars);
+  const preview =
+    input.tailContent === undefined
+      ? previewHeadAndTail(input.content, input.previewChars, tailChars)
+      : previewHeadAndSeparateTail(input, tailChars);
   const header = preview.tail
     ? `Preview (first ${input.formatBytes(input.previewChars)} and last ${input.formatBytes(tailChars)}):`
     : `Preview (first ${input.formatBytes(input.previewChars)}):`;
@@ -43,7 +51,11 @@ export function formatPersistedOutputEnvelope(input: PersistedOutputEnvelopeInpu
     "",
     header,
     preview.head,
-    preview.omittedChars > 0 ? formatOmittedMarker(preview.omittedChars) : undefined,
+    preview.omittedBytes !== undefined
+      ? `… ${input.formatBytes(preview.omittedBytes)} omitted …`
+      : preview.omittedChars > 0
+        ? formatOmittedMarker(preview.omittedChars)
+        : undefined,
     preview.tail,
     PERSISTED_OUTPUT_CLOSE_TAG,
   ]
@@ -64,7 +76,30 @@ export function isPersistedOutputContent(content: string): boolean {
 interface HeadTailPreview {
   head: string;
   omittedChars: number;
+  /** Set instead of omittedChars when head and tail come from different sources (tailContent). */
+  omittedBytes?: number;
   tail?: string;
+}
+
+function previewHeadAndSeparateTail(
+  input: PersistedOutputEnvelopeInput,
+  tailChars: number,
+): HeadTailPreview {
+  const source = input.tailContent ?? "";
+  const tailBudget = Math.min(source.length, Math.max(0, Math.floor(tailChars)));
+  const head =
+    input.content.length <= input.previewChars
+      ? input.content
+      : input.content.slice(0, cutHeadAtLine(input.content, input.previewChars));
+  if (tailBudget === 0) return { head, omittedChars: input.content.length - head.length };
+  const tail = source.slice(source.length - cutTailAtLine(source, tailBudget));
+  const shownBytes = Buffer.byteLength(head, "utf8") + Buffer.byteLength(tail, "utf8");
+  return {
+    head,
+    omittedChars: 0,
+    omittedBytes: Math.max(0, input.originalBytes - shownBytes),
+    tail,
+  };
 }
 
 function previewHeadAndTail(
