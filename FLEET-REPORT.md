@@ -1,5 +1,16 @@
 # Fleet report: Sando
 
+## 2026-11-17: DeepSeek Harness (dsh) study + DeepSeek releases (read-only, branch only)
+
+Doc: `docs/dsh-study-2026-11-17.md` on `fleet/dsh-study-20261117` (pushed, not merged). Nothing installed, built or run.
+- Telemetry: the dsh CLI is safe in a localhost-only sandbox after a config-only patch layer (rows + env listed in §1). The
+  desktop app is not safe (product analytics, auto-update with no off switch). Open: the `pi-telemetry` dependency is not checked.
+- Top 5 ports for Sando: head+tail spill/pruner, on-demand MCP tool loading, OS sandbox, fork subagents with prefix reuse,
+  ACP server. Each has a done-test.
+- Router/Worker/event filter/watchdog live in `dsh-superagent-prototype`; they fit the Planner/fleet, not Sando.
+- DeepSeek releases: V4.1-Flash-1017 (one-off local test only), chat-demo (cloud, skip), DeepInfer and kernels (no 3090 support, skip).
+- Needs Chuck: the decisions list at the end of the doc.
+
 ## 2026-11-15: `--deny-commands` — Sando enforces the local-only shell block list (branch only, not merged)
 
 Chuck asked for Sando to enforce the same bash deny list opencode gets in local-only chats. Branch
