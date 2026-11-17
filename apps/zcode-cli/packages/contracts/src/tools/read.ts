@@ -176,6 +176,8 @@ export interface ReadTextOutput {
   truncated?: boolean;
   truncatedByTokenCap?: boolean;
   partialViewNotice?: string;
+  /** Sando lean: this range was already read and is unchanged; the content is served again with this note. */
+  rereadNotice?: string;
 }
 
 export interface ReadImageOutput {
@@ -246,6 +248,8 @@ export interface ReadPartsOutput {
 export interface ReadUnchangedOutput {
   type: "file_unchanged";
   filePath: string;
+  /** Sando lean: how many times this unchanged range has been read; set only when the loop cap refuses it. */
+  readCount?: number;
 }
 
 export type ReadOutput =
@@ -270,6 +274,7 @@ export const ReadTextOutputSchema = z
     truncated: z.boolean().optional(),
     truncatedByTokenCap: z.boolean().optional(),
     partialViewNotice: z.string().optional(),
+    rereadNotice: z.string().optional(),
   })
   .strict();
 
@@ -360,6 +365,7 @@ export const ReadUnchangedOutputSchema = z
   .object({
     type: z.literal("file_unchanged"),
     filePath: z.string(),
+    readCount: z.number().int().positive().optional(),
   })
   .strict();
 

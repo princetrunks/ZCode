@@ -42,6 +42,7 @@ import type { ToolSchedule } from "../scheduler.js";
 import type {
   ExecutableToolCall,
   ReadFileStateMap,
+  ReadRepeatPolicy,
   ToolBatchEvent,
   BackgroundTaskControlPort,
   ToolExecutionResult,
@@ -116,6 +117,8 @@ export interface ToolExecutorOptions {
   modelCatalogPort?: ModelCatalogPort;
   runtimeTaskRegistry?: RuntimeTaskRegistry;
   readFileState?: ReadFileStateMap;
+  /** Sando: Read's unchanged re-read policy for the model this call runs under (absent = "refuse"). */
+  getReadRepeatPolicy?: (model: Model | undefined) => ReadRepeatPolicy;
   subagentBackgroundBashMaxMs?: number;
   bashShellSelection?: ExecutionShellSelection;
   getBashShellSelection?: () => ExecutionShellSelection | undefined;
@@ -220,6 +223,7 @@ export interface ToolExecutorDeps {
   modelCatalogPort?: ModelCatalogPort;
   runtimeTaskRegistry?: RuntimeTaskRegistry;
   readFileState: ReadFileStateMap;
+  getReadRepeatPolicy?: (model: Model | undefined) => ReadRepeatPolicy;
   subagentBackgroundBashMaxMs?: number;
   bashShellSelection?: ExecutionShellSelection;
   getBashShellSelection?: () => ExecutionShellSelection | undefined;

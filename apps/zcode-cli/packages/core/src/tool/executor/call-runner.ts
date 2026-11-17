@@ -416,6 +416,7 @@ async function executeToolCallImpl(
       modelCatalogPort: deps.modelCatalogPort,
       runtimeTaskRegistry: deps.runtimeTaskRegistry,
       readFileState: deps.readFileState,
+      readRepeatPolicy: deps.getReadRepeatPolicy?.(model),
       recordReadFileStateMetadata: (metadata) => {
         readFileStateMetadata = metadata;
       },

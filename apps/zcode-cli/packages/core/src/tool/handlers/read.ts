@@ -54,6 +54,13 @@ export { addReadLineNumbers } from "./read-text.js";
 
 const FILE_UNCHANGED_STUB =
   "Wasted call — file unchanged since your last Read. Refer to that earlier tool_result instead.";
+
+// Sando lean (dsh study 2026-11-17, SAN-4472): refusing a re-read made small local models loop or fall back to
+// `cat` (33 refusals in the Sando-vs-dsh head-to-head). With `readRepeatPolicy: "nudge"` an unchanged re-read is
+// served again with a short note; the note gets firmer at READ_REPEAT_FIRM_AT reads, and only a true loop
+// (READ_REPEAT_REFUSE_AT reads of the same unchanged range in one turn) is refused.
+export const READ_REPEAT_FIRM_AT: readonly number[] = [3, 5];
+export const READ_REPEAT_REFUSE_AT = 8;
 const READ_PROVIDER_DESCRIPTION = [
   "Reads a file from the local filesystem.",
   "",
@@ -83,7 +90,9 @@ function formatReadOutput(output: ReadOutput): ModelMessageContent {
     case "text":
       return formatReadTextOutput(output);
     case "file_unchanged":
-      return FILE_UNCHANGED_STUB;
+      return output.readCount === undefined
+        ? FILE_UNCHANGED_STUB
+        : formatReadRepeatRefusal(output.readCount);
     case "image":
       return formatReadImageOutput(output);
     case "video":
@@ -187,8 +196,21 @@ const readHandler: ToolHandler = async (input, context) => {
     const cacheOffset = normalizeCacheOffset(offset);
     const cacheKey = createReadFileStateKey(filePath, cacheOffset, limit);
     const cached = readFileState.get(cacheKey);
-    if (cached && isCachedReadFresh(cached, stat)) {
-      const output = { type: "file_unchanged", filePath } satisfies ReadOutput;
+    const cachedFresh = cached !== undefined && isCachedReadFresh(cached, stat);
+    const readCount =
+      cachedFresh && context.readRepeatPolicy === "nudge"
+        ? nextUnchangedReadCount(cached, context.turnId)
+        : undefined;
+    // Under "nudge" a re-read below the loop cap falls through and is served again (the count rides on the entry).
+    if (cached && cachedFresh && (readCount === undefined || readCount >= READ_REPEAT_REFUSE_AT)) {
+      if (readCount !== undefined) {
+        readFileState.set(cacheKey, { ...cached, readCount, readCountTurnId: context.turnId });
+      }
+      const output = {
+        type: "file_unchanged",
+        filePath,
+        ...(readCount === undefined ? {} : { readCount }),
+      } satisfies ReadOutput;
       recordReadFileStateMetadata(context, {
         output,
         readFileState,
@@ -216,13 +238,14 @@ const readHandler: ToolHandler = async (input, context) => {
       rangeReadRevision,
       offset,
       limit,
+      ...(readCount === undefined ? {} : { readCount, readCountTurnId: context.turnId }),
     });
     recordReadFileStateMetadata(context, {
       output,
       readFileState,
       toolInput: input,
     });
-    return output;
+    return readCount === undefined ? output : { ...output, rereadNotice: formatRereadNotice(readCount) };
   } catch (error) {
     if (isFileSystemPortError(error) && error.code === "not_found") {
       const message = await createMissingReadFileMessage(filePath, context);
@@ -360,6 +383,8 @@ function updateReadFileState(
     rangeReadRevision?: FileSystemStatResult["revision"];
     offset?: number;
     limit?: number;
+    readCount?: number;
+    readCountTurnId?: string;
   },
 ): void {
   const revision = input.stat.revision ?? input.rangeReadRevision;
@@ -376,7 +401,27 @@ function updateReadFileState(
     revisionId: revision?.id,
     mtimeMs: normalizeReadFileStateMtimeMs(revision?.mtimeMs ?? input.stat.mtimeMs),
     sizeBytes: input.stat.sizeBytes,
+    ...(input.readCount === undefined
+      ? {}
+      : { readCount: input.readCount, readCountTurnId: input.readCountTurnId }),
   });
+}
+
+/** Reads of this unchanged range so far, this one included; the count restarts on a new turn. */
+function nextUnchangedReadCount(entry: ReadFileStateEntry, turnId: string | undefined): number {
+  const sameTurn = entry.readCountTurnId === turnId;
+  return (sameTurn ? (entry.readCount ?? 1) : 1) + 1;
+}
+
+function formatRereadNotice(readCount: number): string {
+  if (READ_REPEAT_FIRM_AT.includes(readCount)) {
+    return `You have now read this unchanged file ${readCount} times this turn. Work from the content below (edit, run, or answer) instead of reading it again; at ${READ_REPEAT_REFUSE_AT} reads it is refused.`;
+  }
+  return `Unchanged since you last read it this turn (read ${readCount} times). Shown again below.`;
+}
+
+function formatReadRepeatRefusal(readCount: number): string {
+  return `Refused: this is read ${readCount} of the same unchanged file range this turn, which looks like a loop. Its content is in your earlier Read results. Act on it, read a different range, or report what blocks you.`;
 }
 
 function recordReadFileStateMetadata(
