@@ -1,5 +1,64 @@
 # Fleet report: Sando
 
+## 2026-11-17: dsh port 1 — spill preview shows head + tail, tool-result pruner (branch only, not merged)
+
+Planner SAN-4472 (task 4481). Branch `fleet/sando-spill-headtail-20261117` from `sando` (Sando has no `dev`; `sando` is
+its working branch), pushed to `origin`, NOT merged, no `sando-rebuild`. Spec: `SANDO-SPILL-PRUNER.md`.
+
+**What changed**
+- **Spill preview** (`<persisted-output>`): first 2,000 chars, then `… N omitted …`, then the last ~1,000 chars (cut on
+  line boundaries). Spill path line unchanged.
+  - Found while testing: Bash keeps only the first ~30 kB of output inline. The first version took its "tail" from
+    that head, i.e. from the middle of the log. A truncated Bash result now carries the output file's last 4 kB, so
+    the tail is the real end of the log.
+- **Tool-result pruner:** under compaction pressure, old tool results over 8,192 chars keep head 4,096 + tail 1,024
+  with a marker in between. It never touches the 2 newest groups, makes no model call, and is idempotent.
+  `SANDO_TOOL_RESULT_PRUNER=off` = upstream behaviour; an unknown value is a startup error.
+  - Finding: upstream microcompact (the "clearing" the study meant) is **off by default in Sando**; nothing enables
+    it. So before this branch old results were never trimmed, only summarised by full auto-compaction. The pruner
+    runs on microcompact's trigger anyway; clearing stays as the fallback for an embedder that enables it.
+
+**Tests** [ran]
+- core 194/194 (17 new in `core/test/sando-spill-headtail.test.mjs`); adapters 16/16 (2 new); cli 63 = 60 pass + 3
+  live red-team skips (needs a model), incl. new e2e `cli/test/sando-spill-headtail.e2e.test.mjs` 4/4.
+- The e2e uses the built CLI and a scripted model:
+  - a 101 kB Bash log shows its last line;
+  - on a 32k window old results are pruned and keep their last line;
+  - `off` prunes nothing;
+  - a bad value exits before any request.
+- The same e2e on the base build: spill and pruner tests fail.
+- `pnpm typecheck` (root + contracts/adapters/core/bootstrap) clean; `pnpm lint` 0 errors (72 warnings, as before);
+  `architecture:check --changed` OK.
+- Red-team: deterministic cases pass (in the cli suite). The live suite was not run: it exercises the lean system prompt
+  and tool list only (tool calls are stubbed), and this branch changes neither.
+
+**A/B** [ran] (CRACK `qwen3.8-27b` :8097 on card 1 under `gpu-job-lock`, 19:52–21:23 UTC)
+- Setup: Sando told the window is 32,768 (isolated HOME; the live unit untouched), `SANDO_PROMPT_PROFILE=lean-local`,
+  base = `sando` @ 9156156 vs new = this branch. Tasks: lean-bench t5–t8 plus a new t9 (138k-char check log, the two
+  errors in the last ~450 chars, noise from leftover DEBUG logging). 2 reps, interleaved.
+- Kit: `~/apps/fleet/work/sando-spill-ab/` (`queue.sh`, `analyze.py`, `runs/analysis.md`).
+
+| | pass | median s | prompt tokens | requests | spills | spill re-reads | tail/grep re-runs | pruned | full compactions |
+|---|---|---|---|---|---|---|---|---|---|
+| base | 8/10 | 98 | 999 k | 151 | 0 | 0 | 14 | 0 | 8 |
+| new | 7/10 | 90 | 1,359 k | 194 | 0 | 0 | 9 | 6 results in 1 run | 10 |
+
+- **Honest reading: on CRACK this A/B cannot show an effect either way.**
+  - CRACK never let a log spill. In every t9 run, both arms, it piped the output to a file and ran `tail`/`grep`.
+  - The pruner fired in 1 of 10 runs (t6 r1, 6 results, passed). The largest tool result in t5–t8 was 9.4k chars.
+  - The one extra failure (t8 new r1, timeout) is a run where nothing was pruned or spilled, so its code path was the
+    same as base. t8 is the high-variance task (base r2 also hit the 1,200 s timeout).
+  - The token difference is mostly that run (468 k).
+  - The mechanisms are shown by the deterministic e2e instead.
+- **What the A/B did show:** on a 32k window Sando's *full* compaction dominates: t6 r1 (both arms) and all four t8 runs
+  compacted, 2–5 times each. Upstream compacts at `32,768 − min(maxOut, 21k) − 13,000` ≈ 11.6k estimated tokens,
+  about 35% of the window. That is the study's runner-up "per-model compaction headroom", and on 32k models it matters
+  more than this port.
+
+**Needs Chuck** (also in the form)
+- Merge this branch into `sando` + `sando-rebuild`? Pruner default on (as built) or opt-in?
+- Do the compaction-headroom runner-up before port 2 (on-demand MCP loading)?
+
 ## 2026-11-15: `--deny-commands` — Sando enforces the local-only shell block list (branch only, not merged)
 
 Chuck asked for Sando to enforce the same bash deny list opencode gets in local-only chats. Branch
