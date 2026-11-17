@@ -9,6 +9,7 @@ import {
   parsePromptProfileSetting,
   resolveBashTimeoutPolicy,
   toolResultPrunerEnabledFromEnv,
+  leanSmallestEditFromEnv,
   type AgentProfile,
   type AgentRuntimeConfig,
 } from "@zcode/core";
@@ -286,9 +287,10 @@ function resolveMaxModelStepsPerTurn(
 }
 
 function resolvePromptProfile(options: ZCodeAppOptions): Pick<AgentRuntimeConfig, "promptProfile"> {
-  // Sando: SANDO_TOOL_RESULT_PRUNER=on|off (SANDO-SPILL-PRUNER.md) is read per model step; a bad value fails here,
-  // at startup, instead of in the middle of a turn.
+  // Sando: SANDO_TOOL_RESULT_PRUNER=on|off (SANDO-SPILL-PRUNER.md) and SANDO_LEAN_SMALLEST_EDIT=on|off are read per
+  // model step / prompt build; a bad value fails here, at startup, instead of in the middle of a turn.
   toolResultPrunerEnabledFromEnv(options.env ?? process.env);
+  leanSmallestEditFromEnv(options.env ?? process.env);
   const promptProfile =
     options.runtimeConfig?.promptProfile ??
     parsePromptProfileSetting((options.env ?? process.env).SANDO_PROMPT_PROFILE);

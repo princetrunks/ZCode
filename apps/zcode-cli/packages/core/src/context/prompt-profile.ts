@@ -114,15 +114,26 @@ function withParameterDescriptions(
 // Lean system prompt
 // -----------------------------------------------
 
-const LEAN_IDENTITY = [
-  "You are Sando, a coding agent working in the user's repository through tools. Work autonomously: carry the task through to a verified result without asking for permission on reversible steps.",
-  "",
-  "# How to work",
-  "1. Look before you change: read the relevant files and search the code. Never guess at code you have not opened.",
-  "2. Make the change with the smallest correct edit. Follow the surrounding code's style; only use libraries the project already has; don't create files the task doesn't need.",
-  "3. Verify: run the tests or the code. If none exist and the task asks for them, write them. Never weaken or delete tests to make them pass.",
-  "4. Finish with a short report: what changed (file paths), how you verified it, and anything that failed or was skipped.",
-].join("\n");
+// SANDO_LEAN_SMALLEST_EDIT=off drops "with the smallest correct edit" from step 2 (A/B knob, SAN-4472: the dsh
+// head-to-head suspected it of making the model skip a fix the task's docstring asked for). Default on.
+export function leanSmallestEditFromEnv(env: NodeJS.ProcessEnv = process.env): boolean {
+  const value = env.SANDO_LEAN_SMALLEST_EDIT?.trim().toLowerCase();
+  if (!value || value === "on") return true;
+  if (value === "off") return false;
+  throw new Error(`SANDO_LEAN_SMALLEST_EDIT expects on or off, got "${env.SANDO_LEAN_SMALLEST_EDIT}"`);
+}
+
+function leanIdentity(smallestEdit: boolean): string {
+  return [
+    "You are Sando, a coding agent working in the user's repository through tools. Work autonomously: carry the task through to a verified result without asking for permission on reversible steps.",
+    "",
+    "# How to work",
+    "1. Look before you change: read the relevant files and search the code. Never guess at code you have not opened.",
+    `2. Make the change${smallestEdit ? " with the smallest correct edit" : ""}. Follow the surrounding code's style; only use libraries the project already has; don't create files the task doesn't need.`,
+    "3. Verify: run the tests or the code. If none exist and the task asks for them, write them. Never weaken or delete tests to make them pass.",
+    "4. Finish with a short report: what changed (file paths), how you verified it, and anything that failed or was skipped.",
+  ].join("\n");
+}
 
 const LEAN_RULES_HEADING = "# Rules";
 
@@ -162,8 +173,11 @@ function leanToolRuleLines(toolNames: ReadonlySet<string>): string[] {
   return lines;
 }
 
-export function buildLeanSystemSection(toolNames: readonly string[]): ContextSection {
-  const content = [LEAN_IDENTITY, "", LEAN_RULES_HEADING, ...leanToolRuleLines(new Set(toolNames))].join("\n");
+export function buildLeanSystemSection(
+  toolNames: readonly string[],
+  env: NodeJS.ProcessEnv = process.env,
+): ContextSection {
+  const content = [leanIdentity(leanSmallestEditFromEnv(env)), "", LEAN_RULES_HEADING, ...leanToolRuleLines(new Set(toolNames))].join("\n");
   return {
     name: "Lean System Prompt",
     source: "lean_system_prompt",
