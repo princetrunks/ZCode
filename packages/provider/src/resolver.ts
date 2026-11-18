@@ -93,6 +93,9 @@ export function serializeRegistryModelConfig(
       supportsJsonSchemaOutput: config.properties.supportsJsonSchemaOutput,
       supportsNativeWebSearch: config.properties.supportsNativeWebSearch,
       supportsMidConversationSystem: config.properties.supportsMidConversationSystem,
+      ...(config.properties.compactHeadroomTokens === undefined
+        ? {}
+        : { compactHeadroomTokens: config.properties.compactHeadroomTokens }),
     },
     optionSpecs: {
       reasoningLevel: config.optionSpecs.reasoningLevel,

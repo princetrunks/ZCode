@@ -75,6 +75,8 @@ export const completeModelPropertiesDataSchema = z
     supportsJsonSchemaOutput: z.boolean(),
     supportsNativeWebSearch: z.boolean(),
     supportsMidConversationSystem: z.boolean(),
+    // Sando: auto-compact headroom H in tokens (SANDO-COMPACT-HEADROOM.md); unset = default by context window.
+    compactHeadroomTokens: z.number().int().nonnegative().optional(),
   })
   .strict();
 export const modelPropertiesDataSchema = z

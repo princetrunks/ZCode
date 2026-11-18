@@ -5,6 +5,8 @@ export function autoCompactDecisionLogContext(decision: AutoCompactDecision) {
     contextWindow: decision.contextWindow,
     effectiveContextWindow: decision.effectiveContextWindow,
     estimatedTokenCount: decision.estimatedTokenCount,
+    headroomMode: decision.headroomMode,
+    headroomTokens: decision.headroomTokens,
     inputBudgetTokens: decision.effectiveContextWindow,
     maxOutputTokens: decision.maxOutputTokens,
     modelContextBudgetStrategy: decision.modelContextBudgetStrategy,

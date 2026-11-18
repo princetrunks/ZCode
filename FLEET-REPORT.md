@@ -1,5 +1,71 @@
 # Fleet report: Sando
 
+## 2026-11-17/18: compaction headroom per model (branch only, not merged)
+
+Planner SAN-4472 (task 4481), done before port 2 at Chuck's request. Branch `fleet/sando-headroom-20261117` from `sando`
+(includes port 1), worktree `~/apps/fleet/wt/sando-headroom-20261117`, pushed to `origin`, NOT merged, no `sando-rebuild`,
+`~/apps/sando-release` untouched. Spec: `SANDO-COMPACT-HEADROOM.md`. Run paused 11-17 ~23:35 UTC for the Danielle renders
+and resumed 00:36 UTC; the CRACK run was already complete, so only the missing Bonsai cell plus a second rep were run.
+
+**How much of CRACK's 128k Sando really uses (Chuck-facing)**
+- **Before: 109,880 of 131,072 tokens (84 %). After: the same 109,880 (84 %).** [read] SANDO-COMPACT-HEADROOM.md §1–2
+  (live build on a copy of the live config logs `contextWindow 131072 → threshold 109,880`).
+- So the "~35 %" was never CRACK at 128k. It came from the port-1 bench telling CRACK it had 32k. It is real for every
+  model configured at 32k: Lily, Qwythos, Gemma, qwen38 (11,576 of 32,768).
+- Sando trusts `contextWindow` from the live config (`~/.zcode/v2/provider_config.json`). No default max or lean-profile
+  cap. [ran] CRACK `/props` n_ctx 131072. The config gives forge-crack contextWindow 131072, forge-lily 32768,
+  forge-bonsai2 **65,536** (not 32k: 44,344 → 51,344 tokens, 68 % → 78 %).
+- On the bench no CRACK task got near the line: peak prompt 38k of 128k. Compactions 0 in both arms.
+
+**Cause and fix** (details in the spec)
+- Upstream threshold = W − min(O, 21k) − 13k. Those are fixed 200k-era reserves: 32k → 35 %, 16k → 0 % (it compacts on
+  every request). The token count and system prompt/tool schemas are counted correctly; they are not the cause.
+- New: min(W × 0.85, W − min(O, 21k, W/4) − H). H comes from the model's `properties.compactHeadroomTokens`, else the
+  default by window: 16k 2k, 32k 3k, 64k 6k, 128k+ 13k (the upstream value).
+- 32k → 21,576 (66 %). 64k → 51,344 (78 %). 128k unchanged.
+- Switch: `SANDO_COMPACT_HEADROOM=upstream` (or `off`) restores the old formula exactly. A bad value fails at startup.
+
+**Tests** [ran] in a CPU-capped unit, 2026-11-18 ~00:40 UTC
+- `pnpm cli:build` OK.
+- core 202/202 (8 new); adapters 16/16; cli 66 = 63 pass + 3 live red-team skips (needs a model), incl. new e2e
+  `sando-compact-headroom.e2e.test.mjs`.
+- `tsc --noEmit` clean in contracts, adapters, core, bootstrap, cli.
+- Root `pnpm lint`: 0 errors, 72 warnings (same as port 1); the changed files have 0/0.
+- Red-team: deterministic cases pass in the cli suite. The live suite was not run: this branch changes neither the
+  prompt nor the tool list.
+
+**A/B** [ran] (same build, `SANDO_COMPACT_HEADROOM=upstream` vs auto, lean-local, tasks t5–t9, hidden checks)
+- **CRACK at its real 128k** (card 1, 22:55–23:22 UTC): upstream 5/5, auto 5/5, 0 compactions in both.
+  - The trigger is identical at 128k, so the token and time differences between the arms (1.91 M vs 0.61 M prompt tokens)
+    are run-to-run variance (one upstream t8 wandered to 64 requests), not an effect of the change.
+- **Bonsai 2 told 32k** (card 0, rep 1 + rep 2 of the two tasks that compact, t6 and t8):
+
+| arm | runs | pass | compactions | fired at (real prompt tokens) | prompt tokens | median s |
+|---|---|---|---|---|---|---|
+| upstream | 7 | 4/7 | 16 | 10,731–11,630 | 1.69 M | 406 |
+| auto | 7 | 6/7 | 6 | 20,568–21,489 | 3.70 M | 546 |
+
+  - On the compacting tasks only: auto 3/4, upstream 2/4. One of upstream's passes (r2 t8) hit the 1,200 s timeout and
+    passed only because the check ran on the files it had written.
+  - Cost: each request carries roughly twice the history, so total prompt tokens roughly double (llama.cpp's prefix
+    cache absorbs much of this; wall time was mixed).
+  - n is small (7 per arm, 1 model). It points the right way but is not proof.
+- Kit and data: `~/apps/fleet/work/sando-headroom-ab/` (`queue.sh`, `resume/`, `analyze.py`, `runs/analysis.md`).
+- Bonsai 2 was down (its restart failed during the renders). I started it under the card-0 lock for my cells and stopped
+  it again after, which is the state I found it in. CRACK's unit was not touched.
+
+**Not done / honest gaps**
+- No live-model run at 16k/24k (crack-voice 24k goes from 30 % to 75 %); only unit tests cover those windows.
+- The Bonsai rep 2 covers t6 and t8 only.
+- No chart or render, so nothing was filed to My Hub or the workflow library.
+
+**Needs Chuck** (also posted as a form)
+- Merge `fleet/sando-headroom-20261117` into `sando`? (Port 1's branch is still unmerged too; this one includes it.)
+- Default on merge: the per-model headroom (auto), or keep upstream and opt in per run?
+- 32k headroom default: 3k (66 %) as built, or more conservative (6k ≈ 57 %)?
+- 128k+: keep 13k (CRACK 84 %), or lower it so CRACK compacts at the 85 % cap (~111k)? The difference is small.
+- Then start port 2 (on-demand MCP tools)?
+
 ## 2026-11-17: dsh port 1 — spill preview shows head + tail, tool-result pruner (branch only, not merged)
 
 Planner SAN-4472 (task 4481). Branch `fleet/sando-spill-headtail-20261117` from `sando` (Sando has no `dev`; `sando` is
