@@ -176,6 +176,7 @@ export { DENY_COMMANDS_ENV, readDenyListFile } from "./tool/handlers/bash-deny-l
 // Sando --sandbox
 export {
   decideOsSandboxForBash,
+  isOsSandboxOn,
   osSandboxSettingFromEnv,
   osSandboxWidenFromEnv,
   resetOsSandboxWideningForTest,

@@ -8,7 +8,13 @@ export type SandboxReport = {
   enforcement: "full" | "partial" | "none";
   landlockAbi?: number;
   widen: "none" | "one-call" | "unconfined";
+  // What else --sandbox switches off, so a launcher can require it (an older build does not report these):
+  // no MCP server started, no workspace .zcode/config.json / zcode.json read.
+  mcp: "off";
+  projectConfig: "ignored";
 };
+
+const LOCKDOWN = { mcp: "off", projectConfig: "ignored" } as const;
 
 export function sandboxReportFields(env: NodeJS.ProcessEnv = process.env): {
   sandbox?: SandboxReport;
@@ -26,13 +32,14 @@ export function sandboxReportFields(env: NodeJS.ProcessEnv = process.env): {
   return {
     sandbox:
       selection.runner === "none"
-        ? { mode, runner: "none", enforcement: "none", widen }
+        ? { mode, runner: "none", enforcement: "none", widen, ...LOCKDOWN }
         : {
             mode,
             runner: selection.runner,
             enforcement: selection.enforcement,
             ...(selection.landlockAbi === undefined ? {} : { landlockAbi: selection.landlockAbi }),
             widen,
+            ...LOCKDOWN,
           },
   };
 }

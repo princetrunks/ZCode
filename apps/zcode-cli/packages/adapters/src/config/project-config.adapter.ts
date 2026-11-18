@@ -31,12 +31,26 @@ export interface ProjectConfigDiscovery {
 export function loadProjectConfigs(
   workingDirectory?: string,
   explicitProjectConfigPath?: string,
+  env: NodeJS.ProcessEnv = process.env,
 ): ProjectConfigDiscovery {
   const resolvedWorkingDirectory = resolve(workingDirectory ?? process.cwd());
-  const files = discoverWorkspaceHookConfigPaths({
+  const refs = discoverWorkspaceHookConfigPaths({
     workingDirectory: resolvedWorkingDirectory,
     ...(explicitProjectConfigPath ? { explicitProjectConfigPath } : {}),
-  }).map((ref, discoveryOrder) =>
+  });
+  if (sandboxIgnoresProjectConfig(env)) {
+    return {
+      ...summarizeProjectConfigs([]),
+      diagnostics: refs.map((ref) => ({
+        code: "config_project_ignored_by_sandbox",
+        filePath: ref.path,
+        message: PROJECT_CONFIG_IGNORED_BY_SANDBOX,
+        path: "",
+        severity: "warning" as const,
+      })),
+    };
+  }
+  const files = refs.map((ref, discoveryOrder) =>
     loadProjectConfigFile(ref.path, {
       discoveryOrder,
       explicitProjectConfig: ref.explicitProjectConfig,
@@ -45,6 +59,18 @@ export function loadProjectConfigs(
   );
 
   return summarizeProjectConfigs(files);
+}
+
+// Sando --sandbox (SANDO-OS-SANDBOX.md): a workspace .zcode/config.json or zcode.json is not read at all. Its keys act in
+// Sando's own process, outside the OS sandbox: mcp.servers (a stdio server runs unconfined), plugins.dirs (plugin hooks
+// and MCP), network.httpProxy (every provider request, the whole conversation, through a proxy the repo names),
+// storage.dir (Sando writes outside the workspace). Fails closed like core's isOsSandboxOn: any value but off = on.
+export const PROJECT_CONFIG_IGNORED_BY_SANDBOX =
+  "Project config ignored: --sandbox does not read workspace .zcode/config.json or zcode.json (its MCP servers, plugins, proxy and storage would act outside the OS sandbox)";
+
+export function sandboxIgnoresProjectConfig(env: NodeJS.ProcessEnv = process.env): boolean {
+  const value = env.SANDO_SANDBOX?.trim().toLowerCase();
+  return Boolean(value) && value !== "off" && value !== "none";
 }
 
 export function loadProjectConfigFile(

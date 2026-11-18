@@ -14,6 +14,7 @@ import {
   leanSmallestEditFromEnv,
   mcpToolsModeFromEnv,
   applyOsSandboxGitHardening,
+  isOsSandboxOn,
   osSandboxSettingFromEnv,
   osSandboxWidenFromEnv,
   type AgentProfile,
@@ -176,11 +177,16 @@ export function resolveAppRuntimeConfig(input: {
       ...configResult.config.modelAnomalyGuard,
       ...options.runtimeConfig?.modelAnomalyGuard,
     },
-    mcp: {
-      enabled: options.runtimeConfig?.mcp?.enabled ?? configResult.config.features.mcp,
-      servers: autoConnectMcpServers,
-      trustedOfficialCuaServerNames: [...trustedOfficialCuaServerNames],
-    },
+    // Sando --sandbox (SANDO-OS-SANDBOX.md): no MCP server at all. Every one runs in or from Sando's own process, outside
+    // the OS sandbox: a stdio server is an unconfined child, an http one (the Planner plugin) acts with its own token,
+    // node_repl runs code in-process. Same reason the js tool is refused.
+    mcp: isOsSandboxOn(options.env ?? process.env)
+      ? { enabled: false, servers: {}, trustedOfficialCuaServerNames: [] }
+      : {
+          enabled: options.runtimeConfig?.mcp?.enabled ?? configResult.config.features.mcp,
+          servers: autoConnectMcpServers,
+          trustedOfficialCuaServerNames: [...trustedOfficialCuaServerNames],
+        },
     hooks: mergeRuntimeHooks(
       options.runtimeConfig?.hooks
         ? withHookConfigSource(options.runtimeConfig.hooks, { kind: "internal" })

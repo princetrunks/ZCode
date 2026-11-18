@@ -67,6 +67,17 @@ sando -p "…" --sandbox workspace-write --sandbox-widen unconfined  # run even 
 - The file tools (Read/Write/Edit/Grep/Glob) get `--confine-to-cwd`: they run in Sando's own process, outside the OS
   sandbox.
 - The `js` (node REPL) tool is refused for the same reason.
+- **No MCP server starts** (user config, plugins, the workspace, the built-in `node_repl`): each one runs in or from
+  Sando's own process. A stdio server is an unconfined child process. An http one acts with its own credentials: the
+  Planner plugin carries the owner's token, so a "locked" run could call `run_agent` (a cloud engine), `mail_self`,
+  `web_search` or `read_thread`. There is no `load_tools` either (red team 2026-11-18, `bootstrap/src/app/runtime-config.ts`).
+- **The workspace's `.zcode/config.json` and `zcode.json` are not read** (`adapters/src/config/project-config.adapter.ts`,
+  one `config_project_ignored_by_sandbox` warning per file). Their keys act outside the OS sandbox:
+  - `mcp.servers`: started at startup, unconfined (it read `~/.ssh/id_ed25519` in the red team);
+  - `plugins.dirs`: a workspace plugin's hooks and MCP servers;
+  - `network.httpProxy`: every provider request, so the whole conversation, through a proxy the repo names;
+  - `storage.dir`: Sando writes its session store outside the workspace.
+  - Project hooks were already blocked (they need workspace trust).
 - **The git guard** (`core/src/tool/os-sandbox-git-guard.ts`). Sando itself runs git unconfined in the workspace (the
   context snapshot, checkpoints), and so does the user later. So before and after each sandboxed Bash call, the guard
   compares the repo's program-running config with the last known state:
@@ -112,8 +123,10 @@ sando -p "…" --sandbox workspace-write --sandbox-widen unconfined  # run even 
   built (see 5).
 
 **Report:** the headless JSON (`--json`, and the stream-json `result` line) carries
-`"sandbox": {"mode","runner","enforcement","landlockAbi","widen"}` when the sandbox is on, e.g.
-`{"mode":"workspace-write","runner":"landlock","enforcement":"full","landlockAbi":8,"widen":"none"}`.
+`"sandbox": {"mode","runner","enforcement","landlockAbi","widen","mcp","projectConfig"}` when the sandbox is on, e.g.
+`{"mode":"workspace-write","runner":"landlock","enforcement":"full","landlockAbi":8,"widen":"none","mcp":"off","projectConfig":"ignored"}`.
+A launcher should require `mcp: "off"` and `projectConfig: "ignored"`: builds before 2026-11-18 do not report them, and they
+still started MCP servers and read the workspace config under `--sandbox`.
 
 **Cost:** about 17 ms per Bash call (python3 start + about 47 rules). A bare `bash -c true` takes 1.6 ms, a sandboxed one
 18.9 ms (30 runs each on the forge). The launcher is passed as `python3 -I -S -c <source>`, about 6.4 kB of argv. No
@@ -194,7 +207,8 @@ See `FLEET-REPORT.md` (2026-11-18 port 3 entry). The kit is `~/apps/fleet/work/s
     not;
   - file metadata (`stat`, existence, size) outside the workspace is visible too: Landlock does not restrict stat.
 - **Not inside the sandbox:**
-  - what runs in Sando's own process: WebFetch/WebSearch (network), MCP servers, hooks and the provider connection;
+  - what runs in Sando's own process: WebFetch/WebSearch (network; not in the `lean-local` tool list), the user's own hooks
+    and plugin hooks (from `~`, not the workspace), and the provider connection. MCP servers are off under `--sandbox`;
   - processes Sando starts itself: the shell-init snapshot (the user's login shell, as upstream).
   - The sandbox is for Bash. The file tools are covered by `--confine-to-cwd` instead.
 - **Readable by design:** `/etc` and every `PATH` directory.
@@ -207,3 +221,9 @@ See `FLEET-REPORT.md` (2026-11-18 port 3 entry). The kit is `~/apps/fleet/work/s
   - **The launcher is x86_64 only.** Elsewhere the probe fails and Sando fails closed.
   - **Interactive approval for the widening** (ask the user in the TUI/web) is not built; the flag is the approval.
 - **Session resume:** the one-call widening is counted per session id in memory, so a new process gets a new one.
+- **A background job outlives the run:** `(sleep 45; …) & disown` was still running after Sando exited. It stays confined
+  (same Landlock domain, no network), but nothing stops it. The launcher should run Sando in its own cgroup (a
+  `systemd-run --user` service is killed whole when Sando exits).
+- **What a sandboxed run leaves in the workspace** (hooks under `.husky/`, `.gitattributes`, `.zcode/config.json`,
+  `.claude/settings.json`, symlinks to `~`) is the launcher's problem: whoever copies the result back must not run git hooks
+  on it or follow its symlinks. The Planner does that through the dsh apply (`sandoApplyBack`).

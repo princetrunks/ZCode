@@ -313,7 +313,9 @@ export type ConfigDiagnosticSeverity = "warning" | "error";
 export type ConfigDiagnosticCode =
   | "config_file_invalid"
   | "config_mcp_server_invalid"
-  | "config_project_hooks_pending_trust";
+  | "config_project_hooks_pending_trust"
+  // Sando --sandbox: workspace config files are not read (project-config.adapter.ts).
+  | "config_project_ignored_by_sandbox";
 
 export interface ConfigDiagnostic {
   code: ConfigDiagnosticCode;
