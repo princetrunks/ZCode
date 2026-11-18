@@ -79,4 +79,4 @@ SANDO_COMPACT_HEADROOM=upstream sando ...   # the upstream formula, exactly (ali
 
 ## 5. A/B
 
-See `FLEET-REPORT.md` (2026-11-17, compaction headroom). Kit: `~/apps/fleet/work/sando-headroom-ab/`.
+See `FLEET-REPORT.md` (2026-11-17/18, compaction headroom): CRACK 128k 5/5 vs 5/5, 0 compactions; Bonsai told 32k upstream 4/7 (16 compactions at ~11k) vs auto 6/7 (6 at ~21k). Kit: `~/apps/fleet/work/sando-headroom-ab/`.
