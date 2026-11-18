@@ -60,9 +60,10 @@ export async function readTextFileForModel({
 }
 
 export function formatReadTextOutput(output: ReadTextOutput): string {
-  const partialViewPrefix = output.partialViewNotice
-    ? `${formatReadToolResultWarning(output.partialViewNotice)}\n\n`
-    : "";
+  const partialViewPrefix = [output.rereadNotice, output.partialViewNotice]
+    .filter((notice): notice is string => Boolean(notice))
+    .map((notice) => `${formatReadToolResultWarning(notice)}\n\n`)
+    .join("");
 
   if (!output.content) {
     const warning =

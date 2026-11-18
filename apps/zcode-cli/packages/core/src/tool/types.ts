@@ -175,6 +175,11 @@ export interface ToolExecutionContext {
   modelCatalogPort?: ModelCatalogPort;
   runtimeTaskRegistry?: RuntimeTaskRegistry;
   readFileState?: ReadFileStateMap;
+  /**
+   * Sando: what Read does with an unchanged re-read. "refuse" (absent) = upstream "Wasted call" stub; "nudge" =
+   * serve the content again with a note and refuse only a loop (lean prompt profile).
+   */
+  readRepeatPolicy?: ReadRepeatPolicy;
   recordReadFileStateMetadata?: (metadata: PersistedReadFileStateMetadata) => void;
   /** 记录 Skill resolved metadata；仅用于 telemetry，不改变模型可见结果。 */
   recordSkillTelemetryMetadata?: (metadata: SkillTelemetryMetadata) => void;
@@ -211,7 +216,12 @@ export interface ReadFileStateEntry {
   revisionId?: string;
   mtimeMs?: number;
   sizeBytes?: number;
+  /** Sando lean: reads of this unchanged range in `readCountTurnId` (absent = read once). */
+  readCount?: number;
+  readCountTurnId?: string;
 }
+
+export type ReadRepeatPolicy = "refuse" | "nudge";
 
 export type ReadFileStateMap = Map<string, ReadFileStateEntry>;
 

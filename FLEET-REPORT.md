@@ -1,5 +1,61 @@
 # Fleet report: Sando
 
+## 2026-11-18: lean re-reads served instead of "Wasted call", smallest-edit A/B, rg + git in the dsh box (branch only, not merged)
+
+Planner SAN-4472 (task 4481). Branch `fleet/sando-lean-reread-20261117` from `sando` @ a53d516e, pushed to `origin`.
+NOT merged, no `sando-rebuild`; compaction untouched (the headroom worker owns it). Spec + numbers: `SANDO-LEAN-REREAD.md`.
+
+**What changed** [ran: tests below]
+- **Lean re-reads** (3c9eeb65, 1b568e00): an unchanged re-read returns the content plus a short note (firmer at 3 and
+  5 reads), and only the 8th read of one range in a turn is refused as a loop. The default profile keeps upstream.
+- **Found while testing:** most "Wasted call" refusals were the model reading back **its own edit**. Edit/Write
+  refresh the read state, so upstream calls the edited file "unchanged". In the 11-17 h2h that was 24 of the 31
+  classified refusals (7 true re-reads); in this A/B's base arm, 17 of 20. Lean now treats a read after Edit/Write as
+  a first read (content, no note).
+- **`SANDO_LEAN_SMALLEST_EDIT=on|off`** (04ba76be): A/B knob, default on; a bad value exits at startup.
+- **dsh box image 0.2 = 0.1 + ripgrep + git**, now the `dsh-box` default. Fork commit 744b7067f1 on branch
+  `fleet/dsh-box-rg-git-20261117`, fast-forwarded to master and pushed to ShrineTech/deepseek-harness only. In 45
+  runs on 0.2 there was no `rg: command not found` (the 0.1 h2h had it in 4 runs).
+
+**Tests** [ran]
+- core 200/200 (5 new in `sando-read-repeat.test.mjs`, 1 in `sando-prompt-profile`); adapters 16/16.
+- cli: 65 pass + 3 live red-team skips, including the new e2e `sando-read-repeat.e2e.test.mjs` 5/5 (built CLI +
+  scripted model). Its lean re-read test fails on the base build.
+- Typecheck (contracts/core/bootstrap) is clean. oxlint shows 0 errors on the touched files.
+  `architecture:check --changed` reports 0 violations.
+
+**A/B on CRACK** [ran] (card 1 under `gpu-job-lock`, 23:32–02:25 UTC, dsh-box image 0.2, 3 CPUs, 0 outbound)
+- Kit: `~/apps/fleet/work/sando-lean-reread/`. Raw data: `/mnt/storage/scratch/sando-lean-reread-1117/`
+  (`analysis.md`).
+- Re-read subset (t3 t5 t6 t7 t8, the CRACK tasks that hit "Wasted call" in the h2h):
+  - base: 18/20, median 74 s, 9.6 M prompt tokens;
+  - first nudge build: 7/10, 92 s;
+  - fixed build: 7/10, 185 s, with 0 refusals and 0 nudges.
+- **This does not show an effect either way:**
+  - 4 of the 6 new-arm failures are t5 runs with no re-read at all. Their requests were byte-identical to base's
+    except for the work-dir path, so that is sampling noise.
+  - The long runs in every arm (up to 1,163 s) are regex/debug rabbit holes, not read loops.
+  - What did change: no refusals, no loop cap hit, and none of base's "cat after refusal" fallbacks.
+- Smallest-edit:
+  - t5: 1/8 with the phrase vs 2/6 without.
+  - Other tasks: 11/12 with vs 8/8 without, and without was faster (median 78 s vs 38 s), at 1 rep.
+  - Leans "drop it", but this is not a result.
+- Live red-team (43 cases, CRACK):
+  - default prompt: 11 pass, 31 fail, 0 error;
+  - knob off: 12 pass, 28 fail, 2 error (llama-server 500s on bad tool-call JSON).
+  - So the knob doesn't weaken the prompt. CRACK's hold rate is low either way (yolo, no gate).
+
+**Not done**
+- Bonsai (where the 5x README loop happened) was not run. Card 0 was held by the headroom A/B all evening, and the
+  brief warned that Bonsai OOM-restarted.
+- No dsh rerun on image 0.2.
+- No chart or graph was produced, so nothing went to My Hub or the workflow library.
+
+**Needs Chuck** (also in the form)
+- Merge this branch into `sando` + `sando-rebuild`?
+- The "smallest correct edit" phrase: keep, drop, or test more first?
+- Re-run the re-read A/B on Bonsai when card 0 is free?
+
 ## 2026-11-17/18: compaction headroom per model (branch only, not merged)
 
 Planner SAN-4472 (task 4481), done before port 2 at Chuck's request. Branch `fleet/sando-headroom-20261117` from `sando`

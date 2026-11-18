@@ -21,6 +21,7 @@ import {
 } from "./tool-allowlist.js";
 import { isStaleBranchRuntimeTaskEvent } from "../methods/runtime-command-generation.js";
 import { resolveEnabledProjectMemoryRoot } from "./project-memory.js";
+import { resolveRuntimePromptProfile } from "../methods/config.js";
 
 const DEFAULT_SUBAGENT_BACKGROUND_BASH_MAX_MS = 3_600_000;
 const EMPTY_RUNTIME_HOOK_CONFIG = {
@@ -197,6 +198,9 @@ function createRuntimeToolExecutor(
     modelCatalogPort: deps.modelCatalogPort,
     runtimeTaskRegistry: runtime.runtimeTaskRegistry,
     readFileState: runtime.readFileState,
+    // Sando lean: an unchanged re-read is served again with a nudge instead of the "Wasted call" refusal.
+    getReadRepeatPolicy: (model) =>
+      resolveRuntimePromptProfile(runtime, model) === "lean" ? "nudge" : "refuse",
     subagentBackgroundBashMaxMs:
       runtime.config.taskType === "subagent_child"
         ? normalizeSubagentBackgroundBashMaxMs(runtime.config.subagents?.backgroundBashMaxMs)

@@ -5,6 +5,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   buildLeanSystemSection,
+  leanSmallestEditFromEnv,
   parsePromptProfileSetting,
   projectLeanTools,
   resolveEffectivePromptProfile,
@@ -132,4 +133,16 @@ test("ContextBuilder: a custom system prompt wins over lean", () => {
   const custom = createContextBuilder(builderConfig({ promptProfile: "lean", customSystemPrompt: "Be a pirate." })).build();
   assert.ok(custom.sections.some((s) => s.source === "custom_system_prompt"));
   assert.ok(!custom.sections.some((s) => s.source === "lean_system_prompt"));
+});
+
+test("SANDO_LEAN_SMALLEST_EDIT: on/unset keeps the line, off drops only the phrase, anything else throws", () => {
+  const tools = ["Read", "Edit", "Bash"];
+  const on = buildLeanSystemSection(tools, {}).content;
+  assert.match(on, /2\. Make the change with the smallest correct edit\. Follow/);
+  assert.equal(buildLeanSystemSection(tools, { SANDO_LEAN_SMALLEST_EDIT: "on" }).content, on);
+  const off = buildLeanSystemSection(tools, { SANDO_LEAN_SMALLEST_EDIT: "off" }).content;
+  assert.match(off, /2\. Make the change\. Follow the surrounding code's style/);
+  assert.doesNotMatch(off, /smallest/);
+  assert.equal(on.replace(" with the smallest correct edit", ""), off);
+  assert.throws(() => leanSmallestEditFromEnv({ SANDO_LEAN_SMALLEST_EDIT: "maybe" }), /expects on or off/);
 });

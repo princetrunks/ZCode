@@ -17,6 +17,7 @@ export { buildMemorySection } from "./sections/memory.js";
 export { buildDesktopContextSection } from "./sections/desktop.js";
 export {
   parsePromptProfileSetting,
+  leanSmallestEditFromEnv,
   resolveEffectivePromptProfile,
   PROMPT_PROFILE_SETTINGS,
   type PromptProfileSetting,
