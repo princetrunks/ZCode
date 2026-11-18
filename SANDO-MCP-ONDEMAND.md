@@ -13,11 +13,13 @@ Planner pays for it on every step, and a 32k model loses more than half its wind
 ## 2. Behaviour
 
 ```sh
-SANDO_MCP_TOOLS=ondemand sando ...   # catalog + load_tools (alias: on-demand)
-# unset / all / eager = upstream: every MCP schema in every request. Any other value is a startup error.
+sando ...                       # default since 2026-11-18, every profile: catalog + load_tools
+SANDO_MCP_TOOLS=all sando ...   # off switch = upstream: every MCP schema in every request (alias: eager)
+# ondemand / on-demand = the default spelled out. Any other value is a startup error.
 ```
 
-With `ondemand`:
+Default for every prompt profile (default, lean, lean-local) since 2026-11-18 (Chuck's form, SAN-4472); it was
+opt-in before. With `ondemand`:
 - **The request carries no MCP schemas up front.** It carries one tool, `load_tools`, whose description is the
   catalog:
   - grouped by server, one line per tool;
@@ -57,12 +59,13 @@ session) and usually happen early, when the prompt is short.
 
 ## 3. Tests
 
-- `core/test/sando-mcp-ondemand.test.mjs` (9): the knob, what is deferrable, the 160-character summaries,
+- `core/test/sando-mcp-ondemand.test.mjs` (9): the knob (unset = ondemand), what is deferrable, the 160-character summaries,
   catalog layout, projection, name resolution (full / short / wildcard / typo suggestions), the handler, and loading
   on a direct call. Also checks that lean keeps `load_tools`.
 - `cli/test/sando-mcp-ondemand.e2e.test.mjs` (7), run against the built CLI with a scripted model and a scripted stdio
   MCP server (`cli/test/fake-mcp-server.mjs`, 40 Planner-sized tools) loaded as a plugin:
-  - default = all;
+  - default (unset) = ondemand in the default, lean and lean-local profiles;
+  - `all` / `eager` = every schema, no `load_tools`, in all three profiles (the off switch);
   - the first request is at least 80 % smaller in MCP bytes and the built-ins are untouched;
   - load_tools → schema → call → result;
   - a direct call works and loads the tool;

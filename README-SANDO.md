@@ -49,6 +49,14 @@ Guard: `apps/zcode-cli/packages/cli/test/sando-phonehome.test.mjs`. It checks lo
 functions, and keeps a reviewed allowlist of hard-coded external URL literals (`sando-phonehome-hosts.json`), so any
 new external host in shipped source fails the test.
 
+## MCP tools on demand (`SANDO_MCP_TOOLS`, default since 2026-11-18)
+
+Requests carry no MCP tool schemas up front. One `load_tools` tool lists every MCP tool (name + a summary of at most
+160 characters, grouped by server); the model loads what it needs, or calls a listed tool directly, and the schema is
+sent from the next request on. On the Planner's 80 tools that is about 18k fewer prompt tokens per request. Every
+prompt profile. `SANDO_MCP_TOOLS=all` (or `eager`) is the off switch: every schema in every request, as upstream.
+Spec and tests: `SANDO-MCP-ONDEMAND.md`.
+
 ## Local model provider
 
 Providers live in `~/.zcode/v2/provider_config.json` (schemaVersion 1): a personal provider rule with

@@ -7,7 +7,7 @@ import {
 } from "../../mcp/on-demand.js";
 import type { AgentRuntimeInternal } from "../internal.js";
 
-/** Hides deferred MCP tools the model has not loaded yet; a no-op unless SANDO_MCP_TOOLS=ondemand. */
+/** Hides deferred MCP tools the model has not loaded yet; a no-op with SANDO_MCP_TOOLS=all (the default is ondemand). */
 export function projectProviderMcpTools<T extends { name: string }>(
   runtime: Pick<AgentRuntimeInternal, "registry">,
   tools: T[],

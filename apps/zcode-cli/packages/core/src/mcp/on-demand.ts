@@ -1,6 +1,6 @@
 // Sando: on-demand MCP tool loading (SANDO-MCP-ONDEMAND.md, SAN-4472 port 2; idea from dsh, MIT, no code copied).
 //
-// With SANDO_MCP_TOOLS=ondemand the provider request carries no MCP tool schemas up front. Instead one `load_tools`
+// Default (SANDO_MCP_TOOLS unset or ondemand, every profile; SANDO_MCP_TOOLS=all is the off switch): the provider request carries no MCP tool schemas up front. Instead one `load_tools`
 // tool lists every MCP tool by name with a summary of at most 160 characters, grouped by server. The model loads the
 // tools it needs; from the next request on they are in the tool list with their full schemas, for the rest of the
 // session. Calling a listed tool directly also loads it (the call runs; the schema follows on the next request).
@@ -16,8 +16,8 @@ export type McpToolsMode = "all" | "ondemand";
 
 export function mcpToolsModeFromEnv(env: NodeJS.ProcessEnv = process.env): McpToolsMode {
   const value = env.SANDO_MCP_TOOLS?.trim().toLowerCase();
-  if (!value || value === "all" || value === "eager") return "all";
-  if (value === "ondemand" || value === "on-demand") return "ondemand";
+  if (!value || value === "ondemand" || value === "on-demand") return "ondemand";
+  if (value === "all" || value === "eager") return "all";
   throw new Error(`SANDO_MCP_TOOLS expects all or ondemand, got "${env.SANDO_MCP_TOOLS}"`);
 }
 

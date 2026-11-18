@@ -191,11 +191,24 @@ const toolTexts = (req) =>
     .filter((m) => m.role === "tool")
     .map((m) => (typeof m.content === "string" ? m.content : JSON.stringify(m.content)));
 
-test("default (unset): every MCP tool is sent, there is no load_tools", async () => {
-  const r = await sando([]);
-  assert.equal(r.status, 0, r.stderr);
-  assert.equal(pluginTools(r.requests[0]).length, 40);
-  assert.ok(!r.requests[0].tools.includes("load_tools"));
+test("default (unset) is ondemand in every profile: the catalog, no MCP schemas up front", async () => {
+  for (const profile of ["default", "lean", "lean-local"]) {
+    const r = await sando([], { SANDO_PROMPT_PROFILE: profile });
+    assert.equal(r.status, 0, `${profile}: ${r.stderr}`);
+    assert.deepEqual(pluginTools(r.requests[0]), [], profile);
+    assert.ok(r.requests[0].tools.includes("load_tools"), profile);
+  }
+});
+
+test("SANDO_MCP_TOOLS=all is the off switch in every profile: every MCP tool is sent, there is no load_tools", async () => {
+  for (const profile of ["default", "lean", "lean-local"]) {
+    for (const value of ["all", "eager"]) {
+      const r = await sando([], { SANDO_MCP_TOOLS: value, SANDO_PROMPT_PROFILE: profile });
+      assert.equal(r.status, 0, `${profile}/${value}: ${r.stderr}`);
+      assert.equal(pluginTools(r.requests[0]).length, 40, `${profile}/${value}`);
+      assert.ok(!r.requests[0].tools.includes("load_tools"), `${profile}/${value}`);
+    }
+  }
 });
 
 test("ondemand: the first request has the catalog instead of the schemas, >= 80% fewer MCP bytes", async () => {

@@ -1,4 +1,4 @@
-// Sando: on-demand MCP tool loading (SANDO-MCP-ONDEMAND.md, SAN-4472 port 2). With SANDO_MCP_TOOLS=ondemand the
+// Sando: on-demand MCP tool loading (SANDO-MCP-ONDEMAND.md, SAN-4472 port 2). By default (SANDO_MCP_TOOLS unset or ondemand) the
 // provider request carries a load_tools catalog (names + <=160-character summaries) instead of every MCP schema.
 // Run: pnpm test in apps/zcode-cli/packages/core (tsx --test).
 import { test } from "node:test";
@@ -19,8 +19,9 @@ import { isLeanTool } from "../src/context/prompt-profile.ts";
 const P = "mcp__plugin_planner_planner__";
 const names = ["add_note", "create_task", "list_tasks", "get_task"].map((n) => P + n);
 
-test("SANDO_MCP_TOOLS: unset/all/eager = all, ondemand/on-demand = ondemand, anything else throws", () => {
-  assert.equal(mcpToolsModeFromEnv({}), "all");
+test("SANDO_MCP_TOOLS: unset/ondemand/on-demand = ondemand (the default), all/eager = all, anything else throws", () => {
+  assert.equal(mcpToolsModeFromEnv({}), "ondemand");
+  assert.equal(mcpToolsModeFromEnv({ SANDO_MCP_TOOLS: "" }), "ondemand");
   assert.equal(mcpToolsModeFromEnv({ SANDO_MCP_TOOLS: "all" }), "all");
   assert.equal(mcpToolsModeFromEnv({ SANDO_MCP_TOOLS: "eager" }), "all");
   assert.equal(mcpToolsModeFromEnv({ SANDO_MCP_TOOLS: " OnDemand " }), "ondemand");
