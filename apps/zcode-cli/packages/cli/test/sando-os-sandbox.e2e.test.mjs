@@ -464,3 +464,19 @@ test("bad --sandbox / --sandbox-widen values fail before any model request", asy
     assert.equal(r.requests, 0);
   }
 });
+
+test("--help lists --sandbox, --sandbox-widen and --deny-commands (en-US and zh-CN)", () => {
+  for (const locale of ["en-US", "zh-CN"]) {
+    const r = spawnSync(process.execPath, [CLI, "--help", "--locale", locale], {
+      encoding: "utf8",
+      env: { ...process.env, HOME: home },
+    });
+    assert.equal(r.status, 0, r.stderr);
+    for (const flag of ["--sandbox <mode>", "--sandbox-widen <mode>", "--deny-commands <file>"]) {
+      assert.ok(r.stdout.includes(`  ${flag} `), `${locale}: ${flag}\n${r.stdout}`);
+    }
+    for (const word of ["workspace-write", "read-only", "one-call", "unconfined"]) {
+      assert.ok(r.stdout.includes(word), `${locale}: ${word}`);
+    }
+  }
+});

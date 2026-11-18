@@ -43,7 +43,15 @@ export const zhCN: ZCodeCopy = {
   --model <provider>/<model>  仅本次运行使用的模型（不保存）
   --harness <dir>  本次运行加载 <dir>/AGENTS.md、<dir>/skills 和 <dir>/agents
   --max-turns <n>  每轮最多模型步数；最后一步不带工具直接回答
-  --confine-to-cwd 文件工具拒绝工作区外的路径（Bash 命令本身不受沙箱限制）
+  --confine-to-cwd 文件工具拒绝工作区外的路径（不涵盖 Bash：见 --sandbox）
+  --deny-commands <file>  拒绝与此 JSON 列表中任一模式匹配的 Bash 命令（在运行前）
+  --sandbox <mode> 在操作系统沙箱中运行每条 Bash 命令：workspace-write 或 read-only（off = 不使用，默认）
+    workspace-write：只有工作区和私有的 $TMPDIR 可写；read-only：只有 $TMPDIR 可写。
+    两者：无网络（完全不能创建 socket），隐藏 ~（工具链除外）、/tmp 和 /run，丢弃凭据类环境变量。
+    同时开启 --confine-to-cwd 并拒绝 js 工具。若本机没有可用的沙箱，Sando 拒绝启动。
+  --sandbox-widen <mode>  --sandbox 最多可放宽到：none（默认）、one-call 或 unconfined
+    one-call：每个会话中第一个请求 dangerouslyDisableSandbox 的 Bash 调用不受限制地运行。
+    unconfined：即使本机没有可用的操作系统沙箱也运行（此时 Bash 不受限制）。
   --resume <sessionId>  按 sessionId 恢复持久化 session（sess_...）
   --target <text>  在 headless 模式运行或设置 session goal
   --target-replace 替换 --target 已存在的 goal

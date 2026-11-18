@@ -43,7 +43,15 @@ Options:
   --model <provider>/<model>  Model for this run only (not saved)
   --harness <dir>  Add <dir>/AGENTS.md, <dir>/skills and <dir>/agents for this run
   --max-turns <n>  Cap model steps per turn; the last step answers without tools
-  --confine-to-cwd File tools refuse paths outside the workspace (Bash commands themselves are not sandboxed)
+  --confine-to-cwd File tools refuse paths outside the workspace (Bash is not covered: see --sandbox)
+  --deny-commands <file>  Refuse Bash commands matching a pattern in this JSON list, before they run
+  --sandbox <mode> Run every Bash command in an OS sandbox: workspace-write or read-only (off = none, the default)
+    workspace-write: only the workspace and a private $TMPDIR are writable; read-only: only $TMPDIR.
+    Both: no network (no sockets at all), ~ (except toolchains), /tmp and /run hidden, credential env vars dropped.
+    Also turns on --confine-to-cwd and refuses the js tool. Sando refuses to start if no sandbox works here.
+  --sandbox-widen <mode>  How far --sandbox may open: none (default), one-call or unconfined
+    one-call: the first Bash call per session that asks for dangerouslyDisableSandbox runs unconfined.
+    unconfined: run even on a host with no usable OS sandbox (Bash then runs unconfined).
   --resume <sessionId>  Resume a persisted session by sessionId (sess_...)
   --target <text>  Run or set the session goal in headless mode
   --target-replace Replace any existing session goal set by --target
