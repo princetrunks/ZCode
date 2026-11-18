@@ -134,6 +134,7 @@ export class NodeExecutionAdapterProcess extends NodeExecutionAdapterResults {
             resolvedShell,
           });
     let spawnEnv = command.envOverlay ? { ...env, ...command.envOverlay } : env;
+    let osSandboxRunner: PreparedChildSpawn["osSandboxRunner"];
     if (osSandbox && sandboxTmp) {
       // Sando --sandbox: wrap the shell in the OS sandbox. Fails closed: no usable runner = the command does not run.
       const selection = selectOsSandbox();
@@ -151,12 +152,13 @@ export class NodeExecutionAdapterProcess extends NodeExecutionAdapterResults {
           privateTmp: sandboxTmp,
           env: spawnEnv,
           extraReadOnly: [
-            join(rootDir, "shell-snapshots"),
+            ...(shellInitSnapshot ? [shellInitSnapshot.path] : []),
             join(rootDir, "bash-startup", sessionId),
           ],
         });
         const confined = osSandboxArgv(selection, paths, command.file, command.args);
         command = { ...command, file: confined.file, args: confined.args, shell: false };
+        osSandboxRunner = selection.runner;
       }
     }
     const baseOptions = {
@@ -177,6 +179,7 @@ export class NodeExecutionAdapterProcess extends NodeExecutionAdapterResults {
       cwdDialect: command.cwdDialect,
       cwdFilePath: capturePlan.cwdFilePath,
       spawnOptions: baseOptions,
+      ...(osSandboxRunner ? { osSandboxRunner } : {}),
     };
   }
 

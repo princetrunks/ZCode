@@ -288,6 +288,92 @@ test(
   },
 );
 
+test(
+  "--sandbox: > /dev/stderr works; git commit works in a linked worktree; the main repo's hooks/config stay read-only",
+  { skip },
+  async () => {
+    const main = path.join(base, "mainrepo");
+    const wt = path.join(base, "wt-e2e");
+    const git = (args, cwd) =>
+      spawnSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", ...args], {
+        cwd,
+        encoding: "utf8",
+      });
+    fs.mkdirSync(main);
+    git(["init", "-q"], main);
+    fs.writeFileSync(path.join(main, "a.txt"), "a\n");
+    git(["add", "a.txt"], main);
+    git(["commit", "-qm", "init"], main);
+    assert.equal(git(["worktree", "add", "-q", wt, "-b", "wt-e2e"], main).status, 0);
+    const steps = [
+      "echo to-stderr > /dev/stderr && echo stderr-ok",
+      "echo b > b.txt && git add b.txt && git -c user.name=t -c user.email=t@t commit -qm wt && git log --oneline | wc -l",
+      `echo '#!/bin/sh' > ${main}/.git/hooks/post-checkout`,
+      `git config --file ${main}/.git/config core.fsmonitor /tmp/x`,
+    ];
+    fake.state.requests.length = 0;
+    fake.state.scenario = ({ msgs }) => {
+      const step = steps[msgs.filter((m) => m.role === "tool").length];
+      return step ? { name: "Bash", args: { command: step, description: "step" } } : null;
+    };
+    const childEnv = { ...process.env, HOME: home };
+    delete childEnv.NODE_TEST_CONTEXT;
+    const child = spawn(
+      process.execPath,
+      [CLI, "-p", "steps", "--mode", "yolo", "--json", "--sandbox", "workspace-write"],
+      {
+        cwd: wt,
+        env: childEnv,
+        timeout: 120_000,
+      },
+    );
+    let stderr = "";
+    child.stderr.on("data", (c) => (stderr += c));
+    child.stdout.on("data", () => {});
+    const status = await new Promise((resolve) => child.on("close", resolve));
+    assert.equal(status, 0, stderr);
+    const [errOut, commit, hook, config] = fake.state.requests
+      .map((q) => q.lastTool)
+      .filter(Boolean);
+    assert.match(errOut, /to-stderr/);
+    assert.match(errOut, /stderr-ok/);
+    assert.match(commit, /\b2\b/, `commit in the worktree: ${commit}`);
+    assert.match(hook, /Permission denied/i);
+    assert.match(config, /Permission denied|could not lock/i);
+    assert.ok(!fs.existsSync(path.join(main, ".git", "hooks", "post-checkout")));
+    assert.doesNotMatch(fs.readFileSync(path.join(main, ".git", "config"), "utf8"), /fsmonitor/);
+  },
+);
+
+test(
+  "--sandbox git guard: a planted fsmonitor and hook in the workspace repo are undone before git runs outside",
+  { skip },
+  async () => {
+    spawnSync("git", ["init", "-q"], { cwd: ws });
+    const r = await sando(
+      [
+        "git config core.fsmonitor ./pwn.sh && printf '#!/bin/sh\\ntouch pwned\\n' > .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit && git config user.email t@t && echo planted",
+        "git config --get core.fsmonitor || echo no-fsmonitor; ls .git/hooks | grep -c sando-blocked; git config --get user.email",
+      ],
+      ["--sandbox", "workspace-write"],
+    );
+    assert.equal(r.status, 0, r.stderr);
+    assert.match(r.toolResults[0], /planted/);
+    assert.match(
+      r.toolResults[0],
+      /Sando sandbox git guard: restored .*core\.fsmonitor.*disabled the new hook .*pre-commit/s,
+    );
+    assert.match(r.toolResults[1], /no-fsmonitor/);
+    assert.match(r.toolResults[1], /^1$/m);
+    assert.doesNotMatch(
+      r.toolResults[1],
+      /t@t/,
+      "the config went back to its state before the command",
+    );
+    fs.rmSync(path.join(ws, ".git"), { recursive: true, force: true });
+  },
+);
+
 test("--sandbox read-only: the workspace is readable but not writable", { skip }, async () => {
   const r = await sando(["cat README.md", "echo x > ro.txt"], ["--sandbox", "read-only"]);
   assert.equal(r.status, 0, r.stderr);

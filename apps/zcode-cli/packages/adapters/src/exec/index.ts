@@ -11,6 +11,8 @@ export { createNodeExecutionAdapter, NodeExecutionAdapter } from "./node-executi
 export { decodeExecutionOutputBuffer } from "./outputEncoding.js";
 export {
   describeOsSandbox,
+  osSandboxAddWritable,
+  osSandboxGitDirs,
   OS_SANDBOX_LAUNCHER_FAILURE_EXIT,
   osSandboxArgv,
   osSandboxEnv,

@@ -1,5 +1,6 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { BashFileOutput } from "./bash-file-output.js";
+import { osSandboxAddWritable } from "./os-sandbox.js";
 import { readCapturedCwd } from "./cwd-capture.js";
 import { defaultCwdDialect } from "./execution-command.js";
 import { NodeExecutionAdapterProcess } from "./node-execution-adapter-process.js";
@@ -199,6 +200,13 @@ export class NodeExecutionAdapterRun extends NodeExecutionAdapterProcess {
           file.fd!,
           file.fd!,
         ];
+        // Sando --sandbox: `> /dev/stderr` reopens the output file by path, so the sandbox must allow that one file.
+        if (prepared.osSandboxRunner) {
+          prepared.command = {
+            ...prepared.command,
+            args: osSandboxAddWritable(prepared.osSandboxRunner, prepared.command.args, file.path),
+          };
+        }
       }
 
       const spawnedChild = spawn(

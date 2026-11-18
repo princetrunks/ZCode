@@ -10,8 +10,10 @@ import {
   bwrapProfileArgs,
   describeOsSandbox,
   OS_SANDBOX_LAUNCHER_SOURCE,
+  osSandboxAddWritable,
   osSandboxArgv,
   osSandboxEnv,
+  osSandboxGitDirs,
   osSandboxPaths,
   selectOsSandbox,
 } from "../src/exec/os-sandbox.ts";
@@ -233,6 +235,25 @@ test(
       assert.match(r.stdout, /PermissionError: \[Errno 1\] Operation not permitted/);
       assert.match(r.stdout, /pair-ok/, "socketpair still works");
 
+      const sys = confined(
+        `python3 -c "
+import ctypes, os
+l = ctypes.CDLL(None, use_errno=True); l.syscall.restype = ctypes.c_long
+def e(*a):
+    r = l.syscall(*a); return 'ok' if r >= 0 else os.strerror(ctypes.get_errno())
+print('keyctl', e(250, 0, -4, 0, 0, 0)); print('clone-newuser', e(56, 0x10000000 | 17, 0, 0, 0, 0))
+print('clone3', e(435, 0, 0)); print('open_tree', e(428, -100, b'/', 0)); print('perf', e(298, 0, 0, -1, -1, 0))
+pid = os.fork()
+os._exit(0) if pid == 0 else print('fork', 'ok' if os.waitpid(pid, 0)[1] == 0 else 'failed')"`,
+        { ws, tmp },
+      );
+      assert.match(sys.stdout, /keyctl Operation not permitted/, sys.stderr);
+      assert.match(sys.stdout, /clone-newuser Operation not permitted/);
+      assert.match(sys.stdout, /clone3 Function not implemented/);
+      assert.match(sys.stdout, /open_tree Operation not permitted/);
+      assert.match(sys.stdout, /perf Operation not permitted/);
+      assert.match(sys.stdout, /fork ok/);
+
       const bad = spawnSync(
         "/usr/bin/python3",
         ["-I", "-S", "-c", OS_SANDBOX_LAUNCHER_SOURCE, "--bogus"],
@@ -248,19 +269,27 @@ test(
   },
 );
 
-test("env: credentials are dropped, TMPDIR points at the private temp dir, the rest passes", () => {
+test("env: credentials and URLs with passwords are dropped, caches and TMPDIR go to the private temp dir", () => {
   const env = osSandboxEnv(
     {
       PATH: "/usr/bin",
       HOME: "/home/u",
+      PWD: "/w",
       HF_TOKEN: "x",
       CIVITAI_API_KEY: "x",
+      OPENAI_KEY: "x",
       OPENAI_APIKEY: "x",
       AWS_SECRET_ACCESS_KEY: "x",
+      GITHUB_PAT: "x",
       SSH_AUTH_SOCK: "/run/u/ssh",
-      GH_TOKEN: "x",
       DB_PASSWORD: "x",
+      PGPASSWORD: "x",
+      SENTRY_DSN: "x",
+      SLACK_WEBHOOK_URL: "x",
+      DATABASE_URL: "postgres://user:pw@db/x",
+      PLAIN_URL: "https://example.com/a",
       SANDO_PROMPT_PROFILE: "lean",
+      KEYBOARD: "us",
       TMPDIR: "/tmp",
     },
     "/tmp/sando-sbx-1",
@@ -268,9 +297,58 @@ test("env: credentials are dropped, TMPDIR points at the private temp dir, the r
   assert.deepEqual(env, {
     PATH: "/usr/bin",
     HOME: "/home/u",
+    PWD: "/w",
+    PLAIN_URL: "https://example.com/a",
     SANDO_PROMPT_PROFILE: "lean",
+    KEYBOARD: "us",
     TMPDIR: "/tmp/sando-sbx-1",
     TMP: "/tmp/sando-sbx-1",
     TEMP: "/tmp/sando-sbx-1",
+    XDG_CACHE_HOME: "/tmp/sando-sbx-1/.cache",
+    npm_config_cache: "/tmp/sando-sbx-1/.cache/npm",
+    PIP_CACHE_DIR: "/tmp/sando-sbx-1/.cache/pip",
+    GOCACHE: "/tmp/sando-sbx-1/.cache/go",
+    PYTHONPYCACHEPREFIX: "/tmp/sando-sbx-1/.cache/pycache",
   });
+});
+
+test("the Bash output file is added before the command separator; worktree git dirs: own dir + objects/refs/logs", () => {
+  assert.deepEqual(
+    osSandboxAddWritable(
+      "landlock",
+      ["-c", "SRC", "--ro", "/usr", "--", "bash", "-c", "x -- y"],
+      "/o/f.log",
+    ),
+    ["-c", "SRC", "--ro", "/usr", "--rw", "/o/f.log", "--", "bash", "-c", "x -- y"],
+  );
+  assert.deepEqual(osSandboxAddWritable("bwrap", ["--unshare-all", "--", "bash"], "/o/f.log"), [
+    "--unshare-all",
+    "--bind-try",
+    "/o/f.log",
+    "/o/f.log",
+    "--",
+    "bash",
+  ]);
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), "sando-sbx-wt-"));
+  const common = path.join(base, "main", ".git");
+  const own = path.join(common, "worktrees", "wt1");
+  fs.mkdirSync(own, { recursive: true });
+  fs.writeFileSync(path.join(own, "commondir"), "../..\n");
+  fs.mkdirSync(path.join(base, "wt1"));
+  fs.writeFileSync(path.join(base, "wt1", ".git"), `gitdir: ${own}\n`);
+  assert.deepEqual(osSandboxGitDirs(path.join(base, "wt1")), {
+    readOnly: [common],
+    readWrite: [
+      own,
+      path.join(common, "objects"),
+      path.join(common, "refs"),
+      path.join(common, "logs"),
+    ],
+  });
+  assert.deepEqual(
+    osSandboxGitDirs(path.join(base, "main")),
+    { readOnly: [], readWrite: [] },
+    "a normal .git dir",
+  );
+  fs.rmSync(base, { recursive: true, force: true });
 });

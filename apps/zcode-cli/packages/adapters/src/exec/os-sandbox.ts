@@ -8,10 +8,11 @@
 //   - Landlock: the filesystem is invisible except the --ro (read/execute) and --rw (read/write) paths; TCP bind/connect
 //     denied (ABI >= 4); abstract unix sockets and signals scoped (ABI >= 6). Landlock also scopes ptrace, which keeps
 //     /proc/<pid>/environ of processes outside the sandbox unreadable even though /proc is listed;
-//   - seccomp: socket() (every family: TCP, UDP, unix, netlink, raw), connect, bind, listen, accept, ptrace,
-//     process_vm_*, unshare, setns, mount, pivot_root, umount2, bpf, io_uring_* (io_uring would bypass seccomp),
-//     pidfd_getfd and personality fail with EPERM. socketpair() stays, so pipes between children work. Other
-//     architectures and the x32 ABI are killed.
+//   - seccomp: socket() (every family: TCP, UDP, unix, netlink, raw) and the rest of the network calls, ptrace and
+//     process_vm_*, namespaces and mounts (unshare, setns, clone with CLONE_NEW*, the old and new mount APIs), bpf,
+//     io_uring_* (io_uring would bypass seccomp), keyctl/add_key/request_key, userfaultfd, perf_event_open and
+//     file-handle opens fail with EPERM; clone3 gets ENOSYS so libc falls back to clone. socketpair() stays, so pipes
+//     between children work. Other architectures and the x32 ABI are killed.
 // Exit 125 with "sando-confine: ..." on stderr means the launcher failed and the command did not run.
 
 export const OS_SANDBOX_LAUNCHER_SOURCE = String.raw`import ctypes, os, struct, sys, platform
@@ -82,26 +83,47 @@ def landlock(ro, rw):
     os.close(fd)
     return v
 
-# Classic BPF: x86_64 only (other arches and the x32 ABI are killed), listed syscalls -> EPERM.
-# socket connect bind listen accept accept4 ptrace process_vm_readv process_vm_writev unshare setns mount bpf
-# io_uring_setup io_uring_enter io_uring_register (io_uring ops bypass seccomp) pidfd_getfd personality pivot_root umount2
-DENY = [41, 42, 49, 50, 43, 288, 101, 310, 311, 272, 308, 165, 321, 425, 426, 427, 438, 135, 155, 166]
+# Classic BPF, x86_64 only: other architectures and the x32 ABI are killed. EPERM: the network (socket, connect, bind,
+# listen, accept, accept4), other processes (ptrace, process_vm_readv/writev, pidfd_getfd), namespaces and mounts
+# (unshare, setns, mount, pivot_root, umount2, open_tree, move_mount, fsopen, fsconfig, fsmount, fspick, mount_setattr,
+# open_tree_attr), bpf, io_uring_setup/enter/register (io_uring ops bypass seccomp), personality, keyctl, add_key,
+# request_key, userfaultfd, perf_event_open, name_to_handle_at, open_by_handle_at; clone() with any CLONE_NEW* flag.
+# clone3 gets ENOSYS (its flags sit behind a pointer seccomp cannot read), so libc falls back to clone().
+DENY = [41, 42, 49, 50, 43, 288, 101, 310, 311, 438, 272, 308, 165, 155, 166, 428, 429, 430, 431, 432, 433, 442, 467,
+        321, 425, 426, 427, 135, 250, 248, 249, 323, 298, 303, 304]
+SYS_CLONE, SYS_CLONE3 = 56, 435
+CLONE_NEW_FLAGS = 0x7E020000  # NEWNS NEWCGROUP NEWUTS NEWIPC NEWUSER NEWPID NEWNET
 
 def seccomp():
-    LD, JEQ, JGE, RET = 0x20, 0x15, 0x35, 0x06
-    ALLOW, ERRNO_EPERM, KILL = 0x7FFF0000, 0x00050000 | 1, 0x80000000
-    n = len(DENY)
-    prog = [(LD, 0, 0, 4), (JEQ, 1, 0, 0xC000003E), (RET, 0, 0, KILL), (LD, 0, 0, 0), (JGE, n + 2, 0, 0x40000000)]
-    for i, nr in enumerate(DENY):
-        prog.append((JEQ, n - i, 0, nr))
-    prog.append((RET, 0, 0, ALLOW))
-    prog.append((RET, 0, 0, ERRNO_EPERM))
-    prog.append((RET, 0, 0, KILL))
-    raw = b"".join(struct.pack("HBBI", *x) for x in prog)
+    LD, JEQ, JGE, JSET, RET = 0x20, 0x15, 0x35, 0x45, 0x06
+    ALLOW, ERRNO, KILL = 0x7FFF0000, 0x00050000, 0x80000000
+    prog = [("LD", 4), ("JEQ", 0xC000003E, None, "kill"), ("LD", 0), ("JGE", 0x40000000, "kill", None)]
+    prog += [("JEQ", nr, "eperm", None) for nr in DENY]
+    prog += [("JEQ", SYS_CLONE3, "enosys", None), ("JEQ", SYS_CLONE, None, "allow"),
+             ("LD", 16), ("JSET", CLONE_NEW_FLAGS, "eperm", None),
+             ("label", "allow"), ("RET", ALLOW), ("label", "eperm"), ("RET", ERRNO | 1),
+             ("label", "enosys"), ("RET", ERRNO | 38), ("label", "kill"), ("RET", KILL)]
+    labels, ins = {}, []
+    for op in prog:
+        if op[0] == "label":
+            labels[op[1]] = len(ins)
+        else:
+            ins.append(op)
+    raw = b""
+    for i, op in enumerate(ins):
+        if op[0] == "LD":
+            raw += struct.pack("HBBI", LD, 0, 0, op[1])
+        elif op[0] == "RET":
+            raw += struct.pack("HBBI", RET, 0, 0, op[1])
+        else:
+            code = {"JEQ": JEQ, "JGE": JGE, "JSET": JSET}[op[0]]
+            jt = 0 if op[2] is None else labels[op[2]] - i - 1
+            jf = 0 if op[3] is None else labels[op[3]] - i - 1
+            raw += struct.pack("HBBI", code, jt, jf, op[1])
     filt = ctypes.create_string_buffer(raw, len(raw))
     class Fprog(ctypes.Structure):
         _fields_ = [("len", ctypes.c_ushort), ("filter", ctypes.c_void_p)]
-    fp = Fprog(len(prog), ctypes.cast(filt, ctypes.c_void_p))
+    fp = Fprog(len(ins), ctypes.cast(filt, ctypes.c_void_p))
     if libc.prctl(22, 2, ctypes.byref(fp), 0, 0) != 0:
         die("seccomp failed (errno %d)" % ctypes.get_errno())
 
@@ -135,9 +157,9 @@ main(sys.argv[1:])
 `;
 
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, realpathSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
-import { delimiter, isAbsolute, join } from "node:path";
+import { delimiter, isAbsolute, join, resolve } from "node:path";
 
 export type OsSandboxMode = "workspace-write" | "read-only";
 export type OsSandboxRunner = "bwrap" | "landlock";
@@ -341,8 +363,13 @@ export function osSandboxPaths(options: {
     ...(options.extraReadOnly ?? []),
   ];
   const readWrite = [...DEVICES_READ_WRITE, options.privateTmp];
-  if (options.mode === "workspace-write") readWrite.push(options.workspaceRoot);
-  else readOnly.push(options.workspaceRoot);
+  const git = osSandboxGitDirs(options.workspaceRoot);
+  if (options.mode === "workspace-write") {
+    readWrite.push(options.workspaceRoot, ...git.readWrite);
+    readOnly.push(...git.readOnly);
+  } else {
+    readOnly.push(options.workspaceRoot, ...git.readOnly, ...git.readWrite);
+  }
   return { readOnly: unique(readOnly), readWrite: unique(readWrite) };
 }
 
@@ -402,17 +429,80 @@ export function osSandboxArgv(
   };
 }
 
-// Credentials in the environment (HF_TOKEN, *_API_KEY, SSH_AUTH_SOCK...) do not enter the sandbox: with the network
-// closed they could only leak into the model's reply, and no sandboxed command can use them anyway.
+// Credentials in the environment do not enter the sandbox: with the network closed they could only leak into the
+// model's reply, and no sandboxed command can use them anyway. Dropped: names that look like credentials, and any value
+// that is a URL with a password in it (DATABASE_URL=postgres://u:pw@…). Caches go to the private temp dir, since
+// ~/.cache, ~/.npm and the like are not writable.
 const SECRET_ENV_NAME =
-  /TOKEN|SECRET|PASSWORD|PASSWD|API_?KEY|ACCESS_?KEY|PRIVATE_?KEY|CREDENTIAL|AUTH/i;
+  /TOKEN|SECRET|PASSW(OR)?D|PASSPHRASE|API_?KEY|ACCESS_?KEY|PRIVATE_?KEY|_KEY$|^KEY$|CREDENTIAL|AUTH|COOKIE|SESSION|WEBHOOK|DSN$|(^|_)PAT$|SSH_ASKPASS/i;
+const URL_WITH_PASSWORD = /[a-z][a-z0-9+.-]*:\/\/[^/\s:@]+:[^/\s@]+@/i;
 
 export function osSandboxEnv(env: NodeJS.ProcessEnv, privateTmpDir: string): NodeJS.ProcessEnv {
   const out: NodeJS.ProcessEnv = {};
   for (const [name, value] of Object.entries(env)) {
-    if (!SECRET_ENV_NAME.test(name)) out[name] = value;
+    if (SECRET_ENV_NAME.test(name) || (value !== undefined && URL_WITH_PASSWORD.test(value)))
+      continue;
+    out[name] = value;
   }
-  return { ...out, TMPDIR: privateTmpDir, TMP: privateTmpDir, TEMP: privateTmpDir };
+  const cache = join(privateTmpDir, ".cache");
+  return {
+    ...out,
+    TMPDIR: privateTmpDir,
+    TMP: privateTmpDir,
+    TEMP: privateTmpDir,
+    XDG_CACHE_HOME: cache,
+    npm_config_cache: join(cache, "npm"),
+    PIP_CACHE_DIR: join(cache, "pip"),
+    GOCACHE: join(cache, "go"),
+    PYTHONPYCACHEPREFIX: join(cache, "pycache"),
+  };
+}
+
+/** Grant one more writable path to an already confined argv (the Bash output file, which exists only just before spawn). */
+export function osSandboxAddWritable(
+  runner: OsSandboxRunner,
+  args: readonly string[],
+  path: string,
+): string[] {
+  const at = args.indexOf("--");
+  if (at < 0) return [...args];
+  const extra = runner === "bwrap" ? ["--bind-try", path, path] : ["--rw", path];
+  return [...args.slice(0, at), ...extra, ...args.slice(at)];
+}
+
+/**
+ * A linked git worktree (or a submodule) keeps its git dir outside the workspace: `<ws>/.git` is a file
+ * ("gitdir: …"). Its own git dir and the shared objects/, refs/ and logs/ become writable so commits work; the rest
+ * of the common dir (config, hooks, info, packed-refs) stays read-only, so a sandboxed command cannot plant hooks or
+ * config there. A normal `.git` directory is inside the workspace already.
+ */
+export function osSandboxGitDirs(workspaceRoot: string): OsSandboxPaths {
+  const none = { readOnly: [], readWrite: [] };
+  let pointer: string;
+  try {
+    pointer = readFileSync(join(workspaceRoot, ".git"), "utf8");
+  } catch {
+    return none;
+  }
+  const match = /^gitdir:\s*(.+)$/m.exec(pointer);
+  if (!match?.[1]) return none;
+  const gitDir = resolve(workspaceRoot, match[1].trim());
+  let commonDir = gitDir;
+  try {
+    commonDir = resolve(gitDir, readFileSync(join(gitDir, "commondir"), "utf8").trim());
+  } catch {
+    // a submodule's git dir has no commondir file: it is its own common dir
+  }
+  if (commonDir === gitDir) return { readOnly: [], readWrite: [gitDir] };
+  return {
+    readOnly: [commonDir],
+    readWrite: [
+      gitDir,
+      join(commonDir, "objects"),
+      join(commonDir, "refs"),
+      join(commonDir, "logs"),
+    ],
+  };
 }
 
 let privateTmp: string | undefined;

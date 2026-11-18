@@ -8,6 +8,9 @@
 //   - The js REPL tool runs inside Sando's own process, which the OS sandbox cannot reach, so it is refused.
 //   - The file tools get --confine-to-cwd (path-policy.ts isConfinedToWorkspace).
 
+import { homedir } from "node:os";
+import { resolve, sep } from "node:path";
+
 export const SANDBOX_ENV = "SANDO_SANDBOX";
 export const SANDBOX_WIDEN_ENV = "SANDO_SANDBOX_WIDEN";
 
@@ -104,11 +107,19 @@ export function decideOsSandboxForBash(
           : "Refused (--sandbox): running outside the sandbox (dangerouslyDisableSandbox) was not approved for this run. Run the command inside the sandbox, or say in your summary what needs to run outside it.",
     };
   }
+  const workspaceRoot = resolve(context.workspaceRoot ?? context.workingDirectory);
+  const home = resolve(env.HOME || homedir());
+  if (workspaceRoot === "/" || workspaceRoot === home || home.startsWith(workspaceRoot + sep)) {
+    return {
+      kind: "refused",
+      message: `Refused (--sandbox): the workspace is ${workspaceRoot}, which contains the home directory, so the sandbox would protect nothing. Run Sando from the project directory.`,
+    };
+  }
   return {
     kind: "confined",
     os: {
       mode: setting,
-      workspaceRoot: context.workspaceRoot ?? context.workingDirectory,
+      workspaceRoot,
       ...(widen === "unconfined" ? { allowUnconfined: true } : {}),
     },
   };

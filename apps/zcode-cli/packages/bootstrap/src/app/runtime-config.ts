@@ -13,6 +13,7 @@ import {
   toolResultPrunerEnabledFromEnv,
   leanSmallestEditFromEnv,
   mcpToolsModeFromEnv,
+  applyOsSandboxGitHardening,
   osSandboxSettingFromEnv,
   osSandboxWidenFromEnv,
   type AgentProfile,
@@ -410,6 +411,7 @@ function assertOsSandboxUsable(env: NodeJS.ProcessEnv): void {
   const setting = osSandboxSettingFromEnv(env);
   const widen = osSandboxWidenFromEnv(env);
   if (setting === "off") return;
+  applyOsSandboxGitHardening(process.env);
   const selection = selectOsSandbox();
   if (selection.runner === "none" && widen !== "unconfined") {
     throw new Error(

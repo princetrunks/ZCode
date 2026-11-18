@@ -63,6 +63,8 @@ export interface PreparedChildSpawn {
   cwdDialect: ExecutionShellDialect;
   cwdFilePath?: string;
   spawnOptions: SpawnOptions;
+  /** Sando --sandbox: the runner that wraps `command`, so the Bash output file can be granted before spawn. */
+  osSandboxRunner?: "bwrap" | "landlock";
 }
 
 export interface ActiveExecutionRecord {
