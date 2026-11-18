@@ -21,14 +21,24 @@ export function mcpToolsModeFromEnv(env: NodeJS.ProcessEnv = process.env): McpTo
   throw new Error(`SANDO_MCP_TOOLS expects all or ondemand, got "${env.SANDO_MCP_TOOLS}"`);
 }
 
-const NEVER_DEFERRED_MCP_PREFIXES = ["mcp__node_repl__", "mcp__computer_use__", "mcp__computer-use__"] as const;
+const NEVER_DEFERRED_MCP_PREFIXES = [
+  "mcp__node_repl__",
+  "mcp__computer_use__",
+  "mcp__computer-use__",
+] as const;
 
 export function isDeferrableMcpToolName(name: string): boolean {
-  return name.startsWith("mcp__") && !NEVER_DEFERRED_MCP_PREFIXES.some((prefix) => name.startsWith(prefix));
+  return (
+    name.startsWith("mcp__") &&
+    !NEVER_DEFERRED_MCP_PREFIXES.some((prefix) => name.startsWith(prefix))
+  );
 }
 
 /** First sentence (or line) of a description, cut to `max` characters on a word boundary. */
-export function summarizeToolDescription(description: string | undefined, max = MCP_SUMMARY_MAX_CHARS): string {
+export function summarizeToolDescription(
+  description: string | undefined,
+  max = MCP_SUMMARY_MAX_CHARS,
+): string {
   const flat = (description ?? "").replace(/\s+/g, " ").trim();
   if (!flat) return "";
   const sentenceEnd = flat.search(/[.!?](\s|$)/);
@@ -50,7 +60,9 @@ function splitMcpName(tool: CatalogTool): { server: string; short: string } {
   if (tool.serverName && tool.toolName) return { server: tool.serverName, short: tool.toolName };
   const rest = tool.name.slice("mcp__".length);
   const at = rest.indexOf("__");
-  return at < 0 ? { server: "", short: rest } : { server: rest.slice(0, at), short: rest.slice(at + 2) };
+  return at < 0
+    ? { server: "", short: rest }
+    : { server: rest.slice(0, at), short: rest.slice(at + 2) };
 }
 
 /** The `load_tools` description: how to use it, then one line per tool, grouped by server (full name = prefix + name). */
@@ -96,7 +108,9 @@ export function projectOnDemandMcpTools<T extends Pick<ModelToolContract, "name"
   tools: readonly T[],
   loaded: ReadonlySet<string>,
 ): T[] {
-  const deferredLeft = tools.some((tool) => isDeferrableMcpToolName(tool.name) && !loaded.has(tool.name));
+  const deferredLeft = tools.some(
+    (tool) => isDeferrableMcpToolName(tool.name) && !loaded.has(tool.name),
+  );
   return tools.filter((tool) => {
     if (tool.name === LOAD_TOOLS_TOOL_NAME) return deferredLeft;
     return !isDeferrableMcpToolName(tool.name) || loaded.has(tool.name);
@@ -104,8 +118,13 @@ export function projectOnDemandMcpTools<T extends Pick<ModelToolContract, "name"
 }
 
 /** Records MCP tools the model called directly, so their schemas are sent from the next request on. */
-export function noteMcpToolCalls(state: OnDemandMcpState, names: readonly string[], known: ReadonlySet<string>): void {
-  for (const name of names) if (isDeferrableMcpToolName(name) && known.has(name)) state.loaded.add(name);
+export function noteMcpToolCalls(
+  state: OnDemandMcpState,
+  names: readonly string[],
+  known: ReadonlySet<string>,
+): void {
+  for (const name of names)
+    if (isDeferrableMcpToolName(name) && known.has(name)) state.loaded.add(name);
 }
 
 export interface LoadToolsResolution {
@@ -131,7 +150,9 @@ export function resolveLoadToolsRequest(
     if (!name) continue;
     if (name.endsWith("*")) {
       const prefix = name.slice(0, -1);
-      const matches = available.filter((tool) => tool.startsWith(prefix) && prefix.startsWith("mcp__"));
+      const matches = available.filter(
+        (tool) => tool.startsWith(prefix) && prefix.startsWith("mcp__"),
+      );
       if (matches.length > 0) {
         matches.forEach(add);
         continue;
@@ -193,7 +214,10 @@ export function formatLoadToolsResult(resolution: LoadToolsResolution): string {
         : `No tool named ${unknown.name}. Use the exact names from the load_tools description.`,
     );
   }
-  if (lines.length === 0) lines.push("No tool names given. Pass `names`: the full names from the load_tools description.");
+  if (lines.length === 0)
+    lines.push(
+      "No tool names given. Pass `names`: the full names from the load_tools description.",
+    );
   return lines.join("\n");
 }
 
@@ -204,7 +228,8 @@ const LOAD_TOOLS_INPUT_SCHEMA = {
       type: "array",
       items: { type: "string" },
       minItems: 1,
-      description: "Full tool names from this tool's description, or `<prefix>*` for every tool of one server.",
+      description:
+        "Full tool names from this tool's description, or `<prefix>*` for every tool of one server.",
     },
   },
   required: ["names"],
@@ -252,8 +277,17 @@ export function createLoadToolsToolEntry(options: {
       preview: { maxBytes: 16_384, direction: "head" },
     },
     timeout: { defaultMs: 5_000, maxMs: 5_000, allowCallOverride: false },
-    cancellation: { supported: true, cleanup: "none", userVisibleMessage: "load_tools was cancelled" },
-    trace: { required: true, propagateToAdapters: false, recordInput: "summary", recordOutput: "summary" },
+    cancellation: {
+      supported: true,
+      cleanup: "none",
+      userVisibleMessage: "load_tools was cancelled",
+    },
+    trace: {
+      required: true,
+      propagateToAdapters: false,
+      recordInput: "summary",
+      recordOutput: "summary",
+    },
     handler: async (input) => {
       const raw = (input as { names?: unknown }).names;
       const names = Array.isArray(raw)

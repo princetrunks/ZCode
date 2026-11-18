@@ -25,7 +25,10 @@ test("SANDO_MCP_TOOLS: unset/all/eager = all, ondemand/on-demand = ondemand, any
   assert.equal(mcpToolsModeFromEnv({ SANDO_MCP_TOOLS: "eager" }), "all");
   assert.equal(mcpToolsModeFromEnv({ SANDO_MCP_TOOLS: " OnDemand " }), "ondemand");
   assert.equal(mcpToolsModeFromEnv({ SANDO_MCP_TOOLS: "on-demand" }), "ondemand");
-  assert.throws(() => mcpToolsModeFromEnv({ SANDO_MCP_TOOLS: "lazy" }), /SANDO_MCP_TOOLS expects all or ondemand/);
+  assert.throws(
+    () => mcpToolsModeFromEnv({ SANDO_MCP_TOOLS: "lazy" }),
+    /SANDO_MCP_TOOLS expects all or ondemand/,
+  );
 });
 
 test("deferrable: user MCP tools yes; built-ins, node_repl and computer use no", () => {
@@ -48,14 +51,21 @@ test("summaries: first sentence, whitespace folded, never over 160 characters", 
 });
 
 test("catalog: grouped by prefix, one line per tool, an example full name", () => {
-  const d = buildLoadToolsDescription(names.map((name) => ({ name, description: `Does ${name}. Detail.` })));
+  const d = buildLoadToolsDescription(
+    names.map((name) => ({ name, description: `Does ${name}. Detail.` })),
+  );
   assert.match(d, new RegExp(`Tools with the prefix ${P}\\n- add_note: Does ${P}add_note\\.`));
   assert.match(d, new RegExp(`e\\.g\\. \`${P}add_note\``));
   assert.equal(d.split("\n").filter((l) => l.startsWith("- ")).length, 4);
 });
 
 test("projection: unloaded deferred tools hidden, loaded shown, load_tools only while something is left", () => {
-  const tools = [{ name: "Read" }, { name: "load_tools" }, { name: "mcp__node_repl__js" }, ...names.map((name) => ({ name }))];
+  const tools = [
+    { name: "Read" },
+    { name: "load_tools" },
+    { name: "mcp__node_repl__js" },
+    ...names.map((name) => ({ name })),
+  ];
   const shown = (loaded) => projectOnDemandMcpTools(tools, new Set(loaded)).map((t) => t.name);
   assert.deepEqual(shown([]), ["Read", "load_tools", "mcp__node_repl__js"]);
   assert.deepEqual(shown([names[1]]), ["Read", "load_tools", "mcp__node_repl__js", names[1]]);
@@ -63,13 +73,23 @@ test("projection: unloaded deferred tools hidden, loaded shown, load_tools only 
 });
 
 test("resolve: full names, unique short names, server wildcard, unknown with suggestions, already loaded", () => {
-  const r = resolveLoadToolsRequest([names[0], "create_task", "tasks", "nope_tool"], names, new Set());
+  const r = resolveLoadToolsRequest(
+    [names[0], "create_task", "tasks", "nope_tool"],
+    names,
+    new Set(),
+  );
   assert.deepEqual(r.loaded, [names[0], names[1]]);
-  assert.deepEqual(r.unknown.map((u) => u.name), ["tasks", "nope_tool"]);
+  assert.deepEqual(
+    r.unknown.map((u) => u.name),
+    ["tasks", "nope_tool"],
+  );
   assert.deepEqual(r.unknown[0].suggestions, [names[2]]);
   // Typos: "add_notes" and "creat_task" are near names.
   const typo = resolveLoadToolsRequest(["add_notes", "creat_task"], names, new Set());
-  assert.deepEqual(typo.unknown.map((u) => u.suggestions), [[names[0]], [names[1]]]);
+  assert.deepEqual(
+    typo.unknown.map((u) => u.suggestions),
+    [[names[0]], [names[1]]],
+  );
   const all = resolveLoadToolsRequest([`${P}*`], names, new Set([names[0]]));
   assert.deepEqual(all.loaded, names.slice(1));
   assert.deepEqual(all.alreadyLoaded, [names[0]]);

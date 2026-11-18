@@ -30,20 +30,33 @@ const TOOLS = Array.from({ length: 40 }, (_, i) => ({
   inputSchema: {
     type: "object",
     properties: Object.fromEntries(
-      ["task_id", "project_id", "title", "body", "status", "due_date"].slice(0, 4 + (i % 3)).map((key) => [
-        key,
-        { type: key.endsWith("_id") ? "integer" : "string", description: `The ${key.replace("_", " ")} for operation ${i}.` },
-      ]),
+      ["task_id", "project_id", "title", "body", "status", "due_date"]
+        .slice(0, 4 + (i % 3))
+        .map((key) => [
+          key,
+          {
+            type: key.endsWith("_id") ? "integer" : "string",
+            description: `The ${key.replace("_", " ")} for operation ${i}.`,
+          },
+        ]),
     ),
     required: ["task_id"],
   },
 }));
 
 function writeHome() {
-  for (const dir of [ws, path.join(home, ".zcode", "v2"), path.join(home, ".zcode", "cli"), path.join(plugin, ".zcode-plugin")]) {
+  for (const dir of [
+    ws,
+    path.join(home, ".zcode", "v2"),
+    path.join(home, ".zcode", "cli"),
+    path.join(plugin, ".zcode-plugin"),
+  ]) {
     fs.mkdirSync(dir, { recursive: true });
   }
-  fs.writeFileSync(path.join(base, "tools.json"), JSON.stringify({ tools: TOOLS, responses: { get_task: { id: 4481, title: "E_TASK_TITLE" } } }));
+  fs.writeFileSync(
+    path.join(base, "tools.json"),
+    JSON.stringify({ tools: TOOLS, responses: { get_task: { id: 4481, title: "E_TASK_TITLE" } } }),
+  );
   fs.writeFileSync(
     path.join(plugin, ".zcode-plugin", "plugin.json"),
     JSON.stringify({ name: "fakeplanner", version: "0.0.1", description: "e2e" }),
@@ -52,7 +65,11 @@ function writeHome() {
     path.join(plugin, ".mcp.json"),
     JSON.stringify({
       mcpServers: {
-        planner: { type: "stdio", command: process.execPath, args: [MCP_STUB, path.join(base, "tools.json"), callsLog] },
+        planner: {
+          type: "stdio",
+          command: process.execPath,
+          args: [MCP_STUB, path.join(base, "tools.json"), callsLog],
+        },
       },
     }),
   );
@@ -74,7 +91,10 @@ function writeHome() {
               config: {
                 group: "standard-personal",
                 access: { type: "api-key", apiKey: "fake" },
-                api: { type: "openai-chat-completions", baseUrl: `http://127.0.0.1:${fake.port}/v1` },
+                api: {
+                  type: "openai-chat-completions",
+                  baseUrl: `http://127.0.0.1:${fake.port}/v1`,
+                },
                 personalModelIds: ["model-a"],
                 modelOrder: ["model-a"],
               },
@@ -130,21 +150,36 @@ async function sando(steps, env = {}) {
     return step ? { calls: [step] } : {};
   };
   const childEnv = { ...process.env, HOME: home, SANDO_PROMPT_PROFILE: "default", ...env };
-  for (const k of ["ZCODE_MODEL", "ZCODE_HARNESS_DIR", "ZCODE_MAX_TURNS", "ZCODE_CONFINE_TO_CWD", "SANDO_MCP_TOOLS"]) {
+  for (const k of [
+    "ZCODE_MODEL",
+    "ZCODE_HARNESS_DIR",
+    "ZCODE_MAX_TURNS",
+    "ZCODE_CONFINE_TO_CWD",
+    "SANDO_MCP_TOOLS",
+  ]) {
     if (!(k in env)) delete childEnv[k];
   }
-  const child = spawn(process.execPath, [CLI, "-p", "use the planner", "--mode", "yolo", "--json"], {
-    cwd: ws,
-    env: childEnv,
-    timeout: 120_000,
-  });
+  const child = spawn(
+    process.execPath,
+    [CLI, "-p", "use the planner", "--mode", "yolo", "--json"],
+    {
+      cwd: ws,
+      env: childEnv,
+      timeout: 120_000,
+    },
+  );
   let stderr = "";
   child.stdout.on("data", () => {});
   child.stderr.on("data", (c) => (stderr += c));
   const status = await new Promise((resolve) => child.on("close", (code) => resolve(code)));
   fake.state.handler = null;
   const calls = fs.existsSync(callsLog)
-    ? fs.readFileSync(callsLog, "utf8").trim().split("\n").filter(Boolean).map((l) => JSON.parse(l))
+    ? fs
+        .readFileSync(callsLog, "utf8")
+        .trim()
+        .split("\n")
+        .filter(Boolean)
+        .map((l) => JSON.parse(l))
     : [];
   return { status, stderr, requests: [...fake.state.requests], calls };
 }
@@ -152,7 +187,9 @@ async function sando(steps, env = {}) {
 const pluginTools = (req) => req.tools.filter((name) => name.startsWith(PREFIX));
 const def = (req, name) => req.toolDefs.find((t) => t.function?.name === name);
 const toolTexts = (req) =>
-  req.rawMessages.filter((m) => m.role === "tool").map((m) => (typeof m.content === "string" ? m.content : JSON.stringify(m.content)));
+  req.rawMessages
+    .filter((m) => m.role === "tool")
+    .map((m) => (typeof m.content === "string" ? m.content : JSON.stringify(m.content)));
 
 test("default (unset): every MCP tool is sent, there is no load_tools", async () => {
   const r = await sando([]);
@@ -171,8 +208,13 @@ test("ondemand: the first request has the catalog instead of the schemas, >= 80%
   const lines = catalog.function.description.split("\n").filter((l) => l.startsWith("- "));
   assert.equal(lines.length, 40);
   for (const line of lines) assert.ok(line.length <= 2 + 30 + 2 + 160, line);
-  assert.match(catalog.function.description, new RegExp(`Tools with the prefix ${PREFIX}\\n- add_note: Planner operation 0`));
-  const allBytes = JSON.stringify(all.requests[0].toolDefs.filter((t) => t.function.name.startsWith(PREFIX))).length;
+  assert.match(
+    catalog.function.description,
+    new RegExp(`Tools with the prefix ${PREFIX}\\n- add_note: Planner operation 0`),
+  );
+  const allBytes = JSON.stringify(
+    all.requests[0].toolDefs.filter((t) => t.function.name.startsWith(PREFIX)),
+  ).length;
   const odBytes = JSON.stringify(catalog).length;
   assert.ok(odBytes <= allBytes * 0.2, `catalog ${odBytes} B vs schemas ${allBytes} B`);
   // The built-ins are untouched.
@@ -194,13 +236,10 @@ test("ondemand: load_tools by short name, then the tool is in the list with its 
   assert.equal(r.requests.length, 3);
   assert.deepEqual(pluginTools(r.requests[0]), []);
   assert.deepEqual(pluginTools(r.requests[1]), [`${PREFIX}get_task`]);
-  assert.deepEqual(Object.keys(def(r.requests[1], `${PREFIX}get_task`).function.parameters.properties), [
-    "task_id",
-    "project_id",
-    "title",
-    "body",
-    "status",
-  ]);
+  assert.deepEqual(
+    Object.keys(def(r.requests[1], `${PREFIX}get_task`).function.parameters.properties),
+    ["task_id", "project_id", "title", "body", "status"],
+  );
   assert.ok(r.requests[1].tools.includes("load_tools"), "39 tools are still left to load");
   const results = toolTexts(r.requests[2]);
   assert.match(results[0], new RegExp(`Loaded 1 tool: ${PREFIX}get_task`));
@@ -209,7 +248,9 @@ test("ondemand: load_tools by short name, then the tool is in the list with its 
 });
 
 test("ondemand: a direct call without load_tools runs, and the schema is sent from the next request on", async () => {
-  const r = await sando([{ name: `${PREFIX}add_note`, args: { task_id: 1, body: "hi" } }], { SANDO_MCP_TOOLS: "ondemand" });
+  const r = await sando([{ name: `${PREFIX}add_note`, args: { task_id: 1, body: "hi" } }], {
+    SANDO_MCP_TOOLS: "ondemand",
+  });
   assert.equal(r.status, 0, r.stderr);
   assert.deepEqual(r.calls, [{ name: "add_note", args: { task_id: 1, body: "hi" } }]);
   assert.deepEqual(pluginTools(r.requests[1]), [`${PREFIX}add_note`]);
@@ -226,7 +267,10 @@ test("ondemand: unknown names get suggestions; a server wildcard loads all 40 an
   assert.equal(r.status, 0, r.stderr);
   const results = toolTexts(r.requests[2]);
   assert.match(results[0], /Loaded 1 tool: .*planner_tool_7/);
-  assert.match(results[0], new RegExp(`No tool named add_notes\\. Did you mean: ${PREFIX}add_note`));
+  assert.match(
+    results[0],
+    new RegExp(`No tool named add_notes\\. Did you mean: ${PREFIX}add_note`),
+  );
   assert.match(results[1], /Loaded 39 tools/);
   assert.equal(pluginTools(r.requests[2]).length, 40);
   assert.ok(!r.requests[2].tools.includes("load_tools"));

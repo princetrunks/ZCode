@@ -182,17 +182,15 @@ function registerLoadToolsIfOnDemand(
   traceContext: TraceContext,
 ): void {
   if (mcpToolsModeFromEnv(process.env) !== "ondemand") return;
-  const catalog = registered
-    .filter(isDeferrableMcpToolName)
-    .map((name) => {
-      const metadata = runtime.registry.getMetadata(name);
-      return {
-        name,
-        description: metadata?.description,
-        serverName: metadata?.mcpPresentation?.serverName,
-        toolName: metadata?.mcpPresentation?.toolName,
-      };
-    });
+  const catalog = registered.filter(isDeferrableMcpToolName).map((name) => {
+    const metadata = runtime.registry.getMetadata(name);
+    return {
+      name,
+      description: metadata?.description,
+      serverName: metadata?.mcpPresentation?.serverName,
+      toolName: metadata?.mcpPresentation?.toolName,
+    };
+  });
   if (catalog.length === 0) return;
   runtime.registry.register(
     createLoadToolsToolEntry({

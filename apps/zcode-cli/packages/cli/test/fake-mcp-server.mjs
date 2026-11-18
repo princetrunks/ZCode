@@ -40,14 +40,21 @@ function handle(request) {
     if (callsLog) fs.appendFileSync(callsLog, `${JSON.stringify({ name, args })}\n`);
     const tool = tools.find((t) => t.name === name);
     if (!tool) {
-      return send({ jsonrpc: "2.0", id, error: { code: -32602, message: `Unknown tool: ${name}` } });
+      return send({
+        jsonrpc: "2.0",
+        id,
+        error: { code: -32602, message: `Unknown tool: ${name}` },
+      });
     }
     const missing = (tool.inputSchema?.required ?? []).filter((key) => args[key] === undefined);
     if (missing.length > 0) {
       return send({
         jsonrpc: "2.0",
         id,
-        result: { isError: true, content: [{ type: "text", text: `Missing required argument(s): ${missing.join(", ")}` }] },
+        result: {
+          isError: true,
+          content: [{ type: "text", text: `Missing required argument(s): ${missing.join(", ")}` }],
+        },
       });
     }
     const body = responses[name] ?? { ok: true, tool: name };
