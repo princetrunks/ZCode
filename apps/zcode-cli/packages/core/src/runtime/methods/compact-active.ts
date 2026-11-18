@@ -1,3 +1,4 @@
+import { projectProviderMcpTools } from "./mcp-on-demand.js";
 import {
   CompactPhase,
   CompactReason,
@@ -252,7 +253,7 @@ async function compactActiveConversationImpl(
   // ToolSearch/deferred tools 完成前，仅在工具数超过阈值时让 compact summary 保持无工具。
   await this.initializeMcp(turnTraceContext);
   throwIfTurnAborted(options.abortSignal);
-  const runtimeCompactTools = this.getTools(compactModel);
+  const runtimeCompactTools = projectProviderMcpTools(this, this.getTools(compactModel));
   const compactTools =
     runtimeCompactTools.length > COMPACT_TOOL_KEEP_MAX_COUNT ? [] : runtimeCompactTools;
 

@@ -27,6 +27,11 @@ import {
 import { toMcpToolName, toModelVisibleMcpNamePart } from "./name.js";
 
 export { toMcpToolName } from "./name.js";
+export {
+  LOAD_TOOLS_TOOL_NAME,
+  mcpToolsModeFromEnv,
+  type McpToolsMode,
+} from "./on-demand.js";
 
 export {
   HOST_NODE_REPL_IMAGE_MAX_DIMENSION,

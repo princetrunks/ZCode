@@ -76,6 +76,8 @@ const OFFICIAL_BUNDLED_MCP_PREFIXES = ["mcp__node_repl__", "mcp__computer_use__"
 
 export function isLeanTool(name: string): boolean {
   if (LEAN_TOOL_NAMES.has(name)) return true;
+  // Sando SANDO_MCP_TOOLS=ondemand: the catalog of deferred MCP tools (SANDO-MCP-ONDEMAND.md).
+  if (name === "load_tools") return true;
   return name.startsWith("mcp__") && !OFFICIAL_BUNDLED_MCP_PREFIXES.some((prefix) => name.startsWith(prefix));
 }
 

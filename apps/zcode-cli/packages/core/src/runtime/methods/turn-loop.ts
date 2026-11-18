@@ -1,3 +1,4 @@
+import { projectProviderMcpTools } from "./mcp-on-demand.js";
 import { beginLocalTurnPreparation } from "@zcode/contracts";
 import {
   CompactPhase,
@@ -115,12 +116,14 @@ export async function runRegularTurnLoop(
     // automation 派发到已 active 会话或重试恢复时，入口 metadata 可能没有带到
     // loop state；但 queryId 仍是 automation-*。provider 请求边界必须按 queryId 再硬过滤
     // automation 写工具，否则模型会先看到并创建、修改或删除任务定义。
-    const tools =
+    const tools = projectProviderMcpTools(
+      this,
       state.automationCreateLimitReached || state.maxModelStepsReached
         ? []
         : turnDisallowedTools
           ? this.getTools(state.model).filter((tool) => !turnDisallowedTools.has(tool.name))
-          : this.getTools(state.model);
+          : this.getTools(state.model),
+    );
     finishTools();
     if (!outputTokenRecoveryActive && this.needsPlanModeExitReminder) {
       this.needsPlanModeExitReminder = false;
