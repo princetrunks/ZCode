@@ -64,7 +64,8 @@ Spec and tests: `SANDO-MCP-ONDEMAND.md`.
 - writable: the workspace and a private `$TMPDIR`; readable: system dirs, toolchains and `PATH`;
 - invisible: the rest of `$HOME` (`.ssh`, the vault…), `/tmp` and `/run`;
 - no sockets of any kind; credentials dropped from the env;
-- the file tools get `--confine-to-cwd`, and the `js` tool is off.
+- the file tools get `--confine-to-cwd`, and the `js` tool is off;
+- a git guard undoes program-running `.git` config and new hooks that a sandboxed command adds.
 
 No usable sandbox means Sando refuses to start (fail closed) unless `--sandbox-widen unconfined`.
 `--sandbox-widen one-call` lets one `dangerouslyDisableSandbox` Bash call per session out. The headless JSON reports
