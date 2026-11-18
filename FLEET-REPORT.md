@@ -121,6 +121,8 @@ cloudflared token moves out of argv (or Chuck accepts it as known).
 - cloudflared: switch to `--token-file`, or accept the argv token?
 - Background survivors: wrap remote Sando in systemd-run (a small Planner branch)?
 
+Libraries: no image, chart or ComfyUI graph came out of this run, so nothing was filed with h3-note / lib-add.
+
 ## 2026-11-18 (late afternoon): port 3 merged + rebuilt; the Planner gets the sandbox by default for client / local-only Sando runs (branch only)
 
 Planner SAN-4472 (task 4481). Chuck's forms 11-18 15:57–16:01 UTC: merge and rebuild. `--sandbox workspace-write` is ON BY
