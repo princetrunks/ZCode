@@ -86,9 +86,9 @@ after(async () => {
 
 /** Async on purpose: the fake server lives in this process, so a sync spawn would starve it. */
 async function sando(reads, profile, extraEnv = {}) {
+  const steps = typeof reads === "number" ? Array(reads).fill({ name: "Read", args: { file_path: readme } }) : reads;
   fake.state.requests.length = 0;
-  fake.state.scenario = ({ msgs }) =>
-    msgs.filter((m) => m.role === "tool").length < reads ? { name: "Read", args: { file_path: readme } } : null;
+  fake.state.scenario = ({ msgs }) => steps[msgs.filter((m) => m.role === "tool").length] ?? null;
   const env = { ...process.env, HOME: home, SANDO_PROMPT_PROFILE: profile, ...extraEnv };
   for (const k of ["ZCODE_MODEL", "ZCODE_HARNESS_DIR", "ZCODE_MAX_TURNS", "ZCODE_CONFINE_TO_CWD"]) delete env[k];
   const child = spawn(process.execPath, [CLI, "-p", "read the readme", "--mode", "yolo", "--json"], {
@@ -144,4 +144,20 @@ test("SANDO_LEAN_SMALLEST_EDIT=off: the lean system prompt carries step 2 withou
   assert.match(system(on), /smallest correct edit/);
   assert.doesNotMatch(system(off), /smallest/);
   assert.match(system(off), /2\. Make the change\. Follow/);
+});
+
+test("lean: a Read after the model's own Edit shows the new content with no note (upstream says Wasted call)", async () => {
+  const file = path.join(ws, "notes.txt");
+  const steps = [
+    { name: "Read", args: { file_path: file } },
+    { name: "Edit", args: { file_path: file, old_string: "v1", new_string: "v2_EDITED" } },
+    { name: "Read", args: { file_path: file } },
+  ];
+  fs.writeFileSync(file, "v1\n");
+  const lean = toolTexts((await sando(steps, "lean")).requests.at(-1));
+  assert.match(lean[2], /v2_EDITED/);
+  assert.doesNotMatch(lean[2], /Unchanged|Wasted|Refused/);
+  fs.writeFileSync(file, "v1\n");
+  const upstream = toolTexts((await sando(steps, "default")).requests.at(-1));
+  assert.match(upstream[2], /^Wasted call/);
 });

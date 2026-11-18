@@ -18,10 +18,13 @@ fs.writeFileSync(file, "alpha\nbeta\ngamma\n");
 
 const port = createNodeFileSystemAdapter();
 
+const states = new WeakMap();
+const readFileStateOf = (read) => states.get(read);
+
 function session(readRepeatPolicy) {
   const readFileState = new Map();
   let call = 0;
-  return (input, turnId = "turn-1") =>
+  const read = (input, turnId = "turn-1") =>
     readToolEntry.handler(input, {
       toolCallId: `t${(call += 1)}`,
       workingDirectory: base,
@@ -33,6 +36,8 @@ function session(readRepeatPolicy) {
       turnId,
       ...(readRepeatPolicy ? { readRepeatPolicy } : {}),
     });
+  states.set(read, readFileState);
+  return read;
 }
 
 const modelText = (output) => readToolEntry.formatModelContent(output);
@@ -85,4 +90,20 @@ test("nudge: the count is per range and restarts when the file changes or a new 
   assert.doesNotMatch(changed, /Unchanged|Refused/);
   assert.match(changed, /4\tdelta/);
   assert.match(modelText(await read({ file_path: file }, "turn-2")), /\(read 2 times\)/);
+});
+
+test("nudge: a read after the file state was refreshed by Edit/Write is a first read (content, no note)", async () => {
+  const read = session("nudge");
+  const edited = path.join(base, "edited.py");
+  fs.writeFileSync(edited, "x = 1\n");
+  await read({ file_path: edited });
+  // what Edit leaves behind: the entry for the whole-file range, rewritten with sourceTool "Edit" and fresh mtime/size
+  fs.writeFileSync(edited, "x = 2\n");
+  const st = fs.statSync(edited);
+  const [key, entry] = [...readFileStateOf(read)].find(([, e]) => e.path === edited);
+  readFileStateOf(read).set(key, { ...entry, content: "x = 2\n", sourceTool: "Edit", readCount: undefined, mtimeMs: Math.floor(st.mtimeMs), sizeBytes: st.size, revisionId: undefined });
+  const after = modelText(await read({ file_path: edited }));
+  assert.match(after, /^1\tx = 2/);
+  assert.doesNotMatch(after, /Unchanged|Refused|Wasted/);
+  assert.match(modelText(await read({ file_path: edited })), /\(read 2 times\)/);
 });

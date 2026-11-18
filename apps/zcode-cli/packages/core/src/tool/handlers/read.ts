@@ -245,7 +245,9 @@ const readHandler: ToolHandler = async (input, context) => {
       readFileState,
       toolInput: input,
     });
-    return readCount === undefined ? output : { ...output, rereadNotice: formatRereadNotice(readCount) };
+    return readCount === undefined || readCount < 2
+      ? output
+      : { ...output, rereadNotice: formatRereadNotice(readCount) };
   } catch (error) {
     if (isFileSystemPortError(error) && error.code === "not_found") {
       const message = await createMissingReadFileMessage(filePath, context);
@@ -407,8 +409,12 @@ function updateReadFileState(
   });
 }
 
-/** Reads of this unchanged range so far, this one included; the count restarts on a new turn. */
+/**
+ * Reads of this unchanged range so far, this one included; the count restarts on a new turn. An entry last written
+ * by Edit/Write is fresh but the model has not Read that content yet, so this read counts as the first.
+ */
 function nextUnchangedReadCount(entry: ReadFileStateEntry, turnId: string | undefined): number {
+  if (entry.sourceTool !== undefined && entry.sourceTool !== "Read") return 1;
   const sameTurn = entry.readCountTurnId === turnId;
   return (sameTurn ? (entry.readCount ?? 1) : 1) + 1;
 }
