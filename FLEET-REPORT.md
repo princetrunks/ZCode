@@ -1,5 +1,74 @@
 # Fleet report: Sando
 
+## 2026-11-18 (late afternoon): port 3 merged + rebuilt; the Planner gets the sandbox by default for client / local-only Sando runs (branch only)
+
+Planner SAN-4472 (task 4481). Chuck's forms 11-18 15:57–16:01 UTC: merge and rebuild. `--sandbox workspace-write` is ON BY
+DEFAULT only for Planner local-only / client runs. `/tmp` stays blocked. There is no flag that opens all TCP. cloudflared is
+left as it is. Worker `sando-port3-merge-1118`.
+
+**1. Merge port 3** [ran]
+- `sando` = b4b8d0e9: the `--no-ff` merge of `fleet/sando-os-sandbox-20261118` (3666b82a), clean. It was based on 08f75451,
+  the `sando` head. Pushed to `private` and `origin`.
+- Tests [ran] (3-core units):
+  - core 228/228; adapters 23/23;
+  - cli 89 pass + 3 live red-team skips, 0 fail, with `--test-concurrency=3`;
+  - tsc clean (contracts/adapters/core/bootstrap/cli), and the root `pnpm typecheck` is clean;
+  - oxlint 0 errors (72 warnings, as before); architecture check 0 violations.
+- Format: the same 3 touched files as before were already unformatted on `sando`. Left as they were.
+- Test note: the first cli run had 6 tests fail on timeouts of about 120 s each. node --test's default concurrency
+  (cores − 1 = 31 CLI processes) starves inside a 3-core cap, and those same tests pass at concurrency 3.
+
+**2. Rebuild** [ran] 16:12–16:17 UTC
+- Nothing live: no `zcode.mjs -p/--print` process, and sando-web had no open connections.
+- `~/bin/sando-rebuild` ran (3-core unit). sando-web is active, HTTP 200 on :3033. Revert = `~/apps/sando-release.old`.
+- The live bundle passes the sandbox e2e: the 12 tests of `sando-os-sandbox.e2e.test.mjs`, pointed at
+  `~/apps/sando-release/agent/zcode.cjs`, pass 12/12.
+- `~/bin/sando` runs the dev `dist/zcode.cjs`, which the check above rebuilt from b4b8d0e9. That is the binary the Planner's
+  forge path starts.
+- Live smoke [ran] (CRACK, card 1, under `gpu-job-lock`): `~/bin/sando -p … --sandbox workspace-write --sandbox-widen none`
+  in `/tmp/pp-sando/…`.
+  - JSON `sandbox = {workspace-write, landlock, full, ABI 8, widen none}`;
+  - a write in the workspace worked;
+  - `~/.ssh/id_ed25519` gave Permission denied;
+  - curl to :3033 got no connection.
+- Small gap: `--help` does not list `--sandbox` / `--sandbox-widen`.
+
+**3. Planner: sandbox by default** (branch `fleet/sando-sandbox-default-20261118`, 01ca70b10, pushed to origin, NOT merged)
+- The branch is cut from the live HEAD 1019968cb (`feature/ui-refresh-messages`), not from `origin/dev`: `dev` is 1,654
+  commits behind the deployed branch. Earlier Sando Planner branches were cut the same way.
+- In `server/src/services/agentHarness.js`:
+  - `runZCode` adds `--sandbox workspace-write --sandbox-widen none` when the run is for a client project
+    (`target.isClient`) or a local-only chat. This covers both the forge ssh path and the local `ZCODE_BIN` path.
+  - Pinning widen to `none` means a `SANDO_SANDBOX_WIDEN` in the host env cannot open it.
+  - Every other run is unchanged.
+- **Fails closed** (`sandoSandboxFailure`). The run throws a clear error ("Sando could not enforce its OS sandbox … Nothing
+  ran unsandboxed, and it was not retried without the sandbox") when:
+  - Sando refuses to start ("no usable OS sandbox");
+  - an old build rejects the flag;
+  - a build exits 0 with no `sandbox` report;
+  - the report shows runner/enforcement `none` or a widen.
+  - A zcode error never falls back to another engine.
+- `SANDO_LOCAL_ONLY_SAFE` and `localLock.js` are unchanged: local-only chats still swap Sando to opencode.
+- Tests [ran]: new `sandoSandboxDefault.test.mjs`, 9/9. It drives the real `runAgent` with a fake `ZCODE_BIN` on a scratch
+  git project and covers:
+  - a client run gets the flags; a non-client run gets none;
+  - a local-only run (SAFE=1) gets the sandbox AND the deny list;
+  - a refusal fails, with exactly one call (no retry);
+  - an old build or a widened report fails;
+  - the real release with `SANDO_SANDBOX_RUNNER=none` fails closed.
+- Suites [ran]: server 2,612 tests, 2,608 pass, 0 fail, 4 skipped. Client 281 tests, 280 pass, 0 fail, 1 skipped. Client
+  `vite build` OK (fleet.slice, 3 cores).
+- Docs: `docs/agent-harnesses.md`.
+
+**Red team:** the kit-based Planner tests passed inside the server suite [ran]. The Sando prompt did not change in this
+merge, so the CRACK kit run was not repeated [not checked this round]. The 11-18 port-3 run and the 121-command replay are
+in the entry below.
+
+**Needs Chuck** (form posted):
+- Merge the Planner branch (after the director's checker)?
+- Allow Sando in local-only chats now that the sandbox exists (`SANDO_LOCAL_ONLY_SAFE=1`)?
+- Add `--sandbox` / `--sandbox-widen` to Sando's `--help`?
+
 ## 2026-11-18 (afternoon): port 2 merged with on-demand MCP as the default, rebuilt; port 3 OS sandbox (branch only, NOT merged)
 
 Planner SAN-4472 (task 4481). Chuck's form 11-18 13:12 UTC: merge port 2, `ondemand` default for every profile, rebuild,
