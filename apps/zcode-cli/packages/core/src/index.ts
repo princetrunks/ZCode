@@ -173,6 +173,17 @@ export type {
 
 // Sando --deny-commands
 export { DENY_COMMANDS_ENV, readDenyListFile } from "./tool/handlers/bash-deny-list.js";
+// Sando --sandbox
+export {
+  decideOsSandboxForBash,
+  osSandboxSettingFromEnv,
+  osSandboxWidenFromEnv,
+  resetOsSandboxWideningForTest,
+  SANDBOX_ENV,
+  SANDBOX_WIDEN_ENV,
+} from "./tool/os-sandbox-policy.js";
+export type { OsSandboxSetting, OsSandboxWiden } from "./tool/os-sandbox-policy.js";
+export { applyOsSandboxGitHardening } from "./tool/os-sandbox-git-guard.js";
 
 // Output helpers
 export { color, formatJson, supportsColor } from "./output.js";

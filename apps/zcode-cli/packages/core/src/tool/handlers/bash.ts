@@ -44,6 +44,8 @@ import { isBashAutoBackgroundEligible } from "./bash-background-policy.js";
 import { resolveBashPermissionRulePolicy } from "./bash-command-permission-policy.js";
 import { decideBashCwdPolicy } from "./bash-cwd-policy.js";
 import { denyListRefusal } from "./bash-deny-list.js";
+import { gitGuardAfter, gitGuardBefore } from "../os-sandbox-git-guard.js";
+import { decideOsSandboxForBash, osSandboxDenialNote } from "../os-sandbox-policy.js";
 import { readStringProperty } from "./bash-metadata.js";
 import { formatBashModelContent, formatPersistedBashModelContent } from "./bash-model-content.js";
 import {
@@ -119,6 +121,17 @@ async function executeBashHandler(
     });
   }
 
+  // Sando --sandbox: confined, the one approved widening, or refused (core/tool/os-sandbox-policy.ts).
+  const sandboxDecision = decideOsSandboxForBash(parsed, context);
+  if (sandboxDecision.kind === "refused") {
+    throw createCoreError(CoreErrorType.PermissionDenied, sandboxDecision.message, {
+      context: { toolCallId: context.toolCallId, toolName: "Bash" },
+      recoverable: true,
+    });
+  }
+  const osSandbox = sandboxDecision.kind === "confined" ? sandboxDecision.os : undefined;
+  const gitGuardNotes = osSandbox ? gitGuardBefore(osSandbox.workspaceRoot) : [];
+
   if (!executionPort) {
     throw createCoreError(
       CoreErrorType.ConfigurationError,
@@ -139,7 +152,7 @@ async function executeBashHandler(
     return emptyBashOutput(parsed);
   }
 
-  const request = createExecutionRequest(parsed, context, timeoutPolicy);
+  const request = createExecutionRequest(parsed, context, timeoutPolicy, osSandbox);
   const progressTiming: BashProgressTiming = {};
   const commandTelemetry = startBashCommandTelemetry(parsed, context);
   const runOptions = createExecutionRunOptions(context, progressTiming, commandTelemetry);
@@ -225,9 +238,23 @@ async function executeBashHandler(
     // 离开项目边界时 reset 回原始工作区，并把 reset 文案放进 Bash stderr。
     await context.setWorkingDirectory?.(cwdDecision.nextWorkingDirectory);
   }
+  if (osSandbox) gitGuardNotes.push(...gitGuardAfter(osSandbox.workspaceRoot));
+  const gitGuardNote = gitGuardNotes.length
+    ? `[Sando sandbox git guard: ${gitGuardNotes.join("; ")}. git would have run these outside the sandbox.]`
+    : undefined;
+  const sandboxNote =
+    sandboxDecision.kind === "widened"
+      ? "[Sando sandbox: this command ran unsandboxed, as the one approved widening for this run.]"
+      : osSandbox
+        ? osSandboxDenialNote(osSandbox.mode, result)
+        : undefined;
+  const stderrSuffix =
+    [cwdDecision.stderrSuffix, sandboxNote, gitGuardNote]
+      .filter((part): part is string => Boolean(part))
+      .join("\n") || undefined;
   const output = await toBashOutput(result, parsed, context, {
     progressTiming,
-    stderrSuffix: cwdDecision.stderrSuffix,
+    stderrSuffix,
   });
   await applyBashReadFileStateEffects({
     command: parsed.command,
@@ -399,6 +426,7 @@ function createExecutionRequest(
   input: BashInput,
   context: ToolExecutionContext,
   timeoutPolicy: BashTimeoutPolicy,
+  osSandbox?: NonNullable<ExecutionRequest["sandbox"]>["os"],
 ): ExecutionRequest {
   const shellSelection = context.bashShellSelection;
   const bashPrelude =
@@ -438,6 +466,7 @@ function createExecutionRequest(
     sandbox: {
       enabled: !input.dangerouslyDisableSandbox,
       dangerouslyDisableSandbox: input.dangerouslyDisableSandbox,
+      ...(osSandbox ? { os: osSandbox } : {}),
     },
     trace: {
       traceId: context.traceId,

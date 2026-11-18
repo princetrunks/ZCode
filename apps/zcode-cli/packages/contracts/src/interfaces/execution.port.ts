@@ -110,6 +110,16 @@ export interface ExecutionSandboxPolicy {
   profile?: string;
   dangerouslyDisableSandbox?: boolean;
   metadata?: Record<string, unknown>;
+  /**
+   * Sando --sandbox (SANDO-OS-SANDBOX.md): run the command under the OS sandbox (bwrap, else Landlock + seccomp).
+   * Set only by the Bash tool. With no usable runner the command does not run, unless `allowUnconfined`
+   * (--sandbox-widen unconfined) is set.
+   */
+  os?: {
+    mode: "workspace-write" | "read-only";
+    workspaceRoot: string;
+    allowUnconfined?: boolean;
+  };
 }
 
 export interface ExecutionOutputLimit {

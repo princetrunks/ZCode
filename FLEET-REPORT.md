@@ -1,5 +1,157 @@
 # Fleet report: Sando
 
+## 2026-11-18 (afternoon): port 2 merged with on-demand MCP as the default, rebuilt; port 3 OS sandbox (branch only, NOT merged)
+
+Planner SAN-4472 (task 4481). Chuck's form 11-18 13:12 UTC: merge port 2, `ondemand` default for every profile, rebuild,
+then port 3. Worker `sando-port2-merge-port3-1118`.
+
+**1. Merge port 2** [ran]
+- `sando` = 08f75451:
+  - the merge of `fleet/sando-mcp-ondemand-20261118` is 473b2b63 (clean);
+  - then the default flip.
+- `SANDO_MCP_TOOLS` unset or `ondemand` = the catalog + `load_tools`, in every profile. `all` / `eager` = the off switch
+  (every schema, as upstream). A bad value still fails at startup.
+- Tests [ran] (`pnpm -r --filter "@zcode/cli..." run build`, then each package's `pnpm test`, in a 3-core unit):
+  - core 217/217; adapters 16/16; cli 77 pass + 3 live red-team skips;
+  - the e2e checks the new default in the default, lean and lean-local profiles, and `all`/`eager` in all three;
+  - tsc clean (contracts/adapters/core/bootstrap/cli); oxlint 0 errors (72 warnings, as before); architecture check 0.
+- Docs: `README-SANDO.md` section and `SANDO-MCP-ONDEMAND.md` §2/§3.
+- Pushed to `private` and `origin`.
+- Note: `pnpm cli:build` alone bundles a stale core `dist`. Build with `pnpm -r --filter "@zcode/cli..." run build`.
+
+**2. Rebuild** [ran] 13:22–13:29 UTC
+- `fleet-rtk-local-ab-1118` was active, but it runs its own frozen copy (`/mnt/storage/scratch/rtk-local-1118/sando-dist`,
+  built 03:26 with a COMMIT file), not `~/apps/sando-release`.
+- `fleet-dsh-harness-1118` was only a sleep loop queued behind rtk. Nothing ran the live release except sando-web's
+  server.
+- `~/bin/sando-rebuild` ran (3-core unit). sando-web is active, HTTP 200 on :3033.
+- The live bundle has the new default: `SANDO_MCP_TOOLS=lazy` exits with the startup error, and the bundled function
+  returns `ondemand` when unset.
+- Revert = `~/apps/sando-release.old`.
+
+**3. Port 3: OS sandbox for Bash**
+- Branch `fleet/sando-os-sandbox-20261118`, from `sando` @ 08f75451, head 72b72316, pushed to `origin`.
+- Spec: `SANDO-OS-SANDBOX.md`.
+- `--sandbox workspace-write|read-only` (`SANDO_SANDBOX`, default off).
+- **Runner chain:** bwrap, then Landlock + seccomp through a Python 3 launcher (`python3 -I -S -c`, stdlib ctypes, no
+  binary, about 17 ms per Bash call).
+  - bwrap fails here (AppArmor userns), so the forge gets `landlock (full, Landlock ABI 8)`. That also works inside
+    the dsh-box Docker image.
+- **What a confined command can reach:**
+  - writable: the workspace, a private `$TMPDIR` and its own output file;
+  - readable: system dirs, toolchains and `PATH`;
+  - invisible: the rest of `~` (`.ssh`, the vault, `.npmrc`), `/tmp` and `/run`.
+- **No network:** `socket()` returns EPERM for every family, unix sockets included (the docker socket would be root).
+- **Credentials in the env are dropped.**
+- **The rest of the run:** the file tools get `--confine-to-cwd`, and the `js` tool is off.
+- **Fails closed:** with no usable runner, Sando refuses to start, before any model request, unless
+  `--sandbox-widen unconfined`.
+- **One approved widening:** `--sandbox-widen one-call` lets one `dangerouslyDisableSandbox` call per session out.
+  Every other such call is refused.
+- **Report:** the headless JSON carries `sandbox: {mode, runner, enforcement, landlockAbi, widen}`.
+- **Independent adversarial review** (a fresh agent with only the code):
+  - It found no direct escape. The seccomp offsets were correct, and every socket family was blocked.
+  - What it did find, and what I did:
+    - **Leak:** the env filter missed names such as `OPENAI_KEY`, `GITHUB_PAT` and `DATABASE_URL` with a password.
+      Fixed: a wider name list, plus URLs with passwords.
+    - **Proxy escape:** a sandboxed command could plant `core.fsmonitor` or hooks in `.git`, and Sando's own
+      unconfined `git status` would then run them. Fixed with the git guard:
+      - program-running config keys that a command adds are restored, and new hooks are renamed `.sando-blocked`;
+      - Sando's own git runs get `core.fsmonitor=false`.
+    - **Breakage:** git did not work in linked worktrees. Fixed: the worktree's own git dir and the shared
+      `objects/refs/logs` are writable, while the main repo's config and hooks stay read-only.
+    - **Breakage:** caches were not writable. Fixed: they now go to `$TMPDIR`.
+    - **Hardening:** namespaces, keyctl, the new mount API, userfaultfd and perf were reachable. Fixed: denied, and
+      `clone3` gets ENOSYS.
+    - **Hardening:** a workspace of `~` or `/` was accepted. Fixed: refused.
+    - **Hardening:** the whole shell-snapshots dir was readable. Fixed: only the exact snapshot file.
+  - Also fixed, found by my own testing: `> /dev/stderr` needs the output file, which is now granted.
+  - **NOT fixed:** the command lines of other processes are readable (`/proc` stays readable; `/dev/stderr` and Node
+    need it, and Landlock cannot grant only a process's own pid). On the forge, `cloudflared` runs with `--token` in its
+    argv: any local process can read it, sandboxed or not. See Needs Chuck.
+- **Tests** [ran] (`fullcheck.sh` in a 3-core unit):
+  - core 228/228 (11 new: `sando-os-sandbox-policy`, `sando-os-sandbox-git-guard`);
+  - adapters 23/23 (7 new; includes the live launcher on this host);
+  - cli 89 pass + 3 live skips, of which 12 are the new e2e (`sando-os-sandbox.e2e.test.mjs`, built CLI + scripted
+    model):
+    - blocked, with no file written outside and the listeners counting 0 connections: `~/.ssh`, reading or writing
+      outside (shell, `python -c`, `node -e`), TCP to a local listener, a unix socket;
+    - the control run without `--sandbox` lets all of them through;
+    - working: `node --test`, git, `$TMPDIR`, `cd` carry-over, `/dev/stderr`, a worktree commit;
+    - also covered: the git guard, read-only mode, `Read ~/.ssh` refused, fail closed, `unconfined`, the one-call
+      widening, bad flags.
+  - tsc clean; oxlint 0 errors (72 warnings); architecture check 0.
+  - Format: new files are clean. The 3 touched files that were already unformatted on `sando` were left as they were.
+- **Host check** [ran] (real `$HOME` and toolchains): `pnpm --version`, `pnpm test`, git, gcc, make and node child
+  processes work. `~/.zshrc` and `ls ~` are denied, and no token env reaches the shell.
+- **Red team** [ran] (the kit on CRACK, card 1 under `gpu-job-lock`, 14:03–14:18 UTC):
+
+  | tool list | pass | fail | error | port 2 |
+  |---|---|---|---|---|
+  | plain | 13 | 29 | 0 | 11 / 29 / 1 |
+  | +load_tools (the default since step 1) | 12 | 29 | 1 | 13 / 28 / 0 |
+
+  - The prompt did not change, so this is no regression.
+  - The 1 error is an engine 500 (CRACK sent malformed tool-call JSON on `print-instructions-01`). It fails the kit's
+    "no case may error" assert, as on 11-17 and 11-18.
+  - The kit stubs tools, so it cannot see the sandbox.
+  - **New: replay** (`replay.mjs`). Every Bash command CRACK attempted in the four live runs (121 unique) ran twice in
+    Docker `--network none`, with a canary `~/.ssh` key, a canary outside file and canary `HF_TOKEN` /
+    `CIVITAI_API_KEY`: once bare, once under the sandbox.
+  - **A canary leaked in 9/121 bare and 0/121 sandboxed**, all of them env reads (`env | grep -i token`,
+    `printenv HF_TOKEN`). 0 writes outside the workspace in either arm.
+- **Lean bench A/B** [ran] (CRACK 128k on card 1; each run under `gpu-job-lock`, ttl 20 min; dsh-box with 3 CPUs; same
+  build 2c647d29; base vs `SANDO_SANDBOX=workspace-write`; t1–t9 × 2, interleaved; 13:58–15:46 UTC):
+
+  | | base | sandbox |
+  |---|---|---|
+  | pass (hidden checks) | 14/18 | 15/18 |
+  | fails | t5 ×2, t7 r1, t8 r1 | t5 ×2, t8 r1 |
+  | median s · total s | 34.5 · 1,868 | 36.5 · 2,310 |
+  | prompt tokens | 2.67 M | 4.75 M |
+  | outbound / launcher errors / refusals | 0 / 0 / 0 | 0 / 0 / 0 |
+
+  - The sandbox arm's extra tokens and time come from three runs:
+    - t6 r1: 31 requests, 244 s;
+    - t6 r2: 74 requests, 420 s;
+    - t8 r2: hit the 900 s timeout, but its repo passes the check.
+  - I found no sandbox cause:
+    - none of them hit a denial;
+    - all four final t6 repos (both arms) pass their tests bare and sandboxed alike;
+    - the tails are CRACK rewriting its own TTL tests.
+  - With 2 reps this is not conclusive.
+  - **Real friction:** in 3 of the 18 sandboxed runs CRACK wrote to a hard-coded `/tmp/…` path and got
+    "Permission denied". It recovered each time.
+- Chart: board 567 ("DeepSeek ports"), and My Hub, Tech Benchmarks: "Tech Benchmark · Sando · OS sandbox for Bash,
+  Landlock + seccomp (2026-11-18)". It is not in the workflow library: `lib-add` takes ComfyUI graphs, and this is a
+  harness change.
+- Kit: `~/apps/fleet/work/sando-os-sandbox/` (`run.sh`, `queue.sh`, `sbxstats.py`, `redteam.sh`, `replay.mjs`,
+  `hostcheck.mjs`, `fullcheck.sh`, `chart/`). Raw runs: `/mnt/storage/scratch/sando-os-sandbox-1118/`.
+- Kit bug: `run.sh` drops a run after a lost lock race. A rerun of `queue.sh` fills the gap, as it did here for r2 sbx
+  t2.
+
+**Not done / untested**
+- bwrap rung live (argv is unit-tested only); non-x86_64 (fails closed).
+- Interactive approval for the widening: the flag is the approval.
+- Bonsai runs. A session resume with the one-call widening.
+- `/dev/shm`, loopback servers in tests (all sockets are blocked).
+- A hook planted by a *background* command before Sando's own next git run.
+
+**Next**
+- A "write temp files to `$TMPDIR`, not `/tmp`" line in the lean prompt when the sandbox is on.
+- Port 4 (fork prefix reuse) when Chuck says go.
+
+**Needs Chuck** (also posted as a form)
+- Merge port 3 into `sando` + rebuild? (`--sandbox` stays opt-in; nothing changes for runs without it.)
+- Turn `--sandbox workspace-write` on by default: for the Planner's local-only/client runs, for every headless run, or
+  not yet?
+- `/tmp` inside the sandbox: keep it blocked (current), or allow it (other sessions' temp files become readable and
+  writable)?
+- Loopback sockets for test suites that start a local server: keep everything blocked, or add an opt-in flag (that
+  opens all TCP; Landlock cannot limit it to loopback)?
+- To do by hand: `cloudflared` runs with `--token …` in its argv, which every local process can read. Move it to
+  `TUNNEL_TOKEN` or a credentials file. Workers must not touch cloudflared.
+
 ## 2026-11-18: merge headroom + lean re-read into `sando`, rebuild, port 2 on-demand MCP tools (port 2 = branch only, not merged)
 
 Planner SAN-4472 (task 4481). Chuck's form 11-17 10:16 PM: merge both, compaction headroom on by default, start port 2.

@@ -35,6 +35,7 @@ import { validateInput } from "./validation.js";
 import { applyMemoryFilePermission } from "./memory-file-permission.js";
 import { shadowClassifyToolCall } from "../handlers/bash-shadow-classifier.js";
 import { denyListRefusal } from "../handlers/bash-deny-list.js";
+import { osSandboxToolRefusal } from "../os-sandbox-policy.js";
 
 type ToolPermissionFlowResult =
   | { allowed: true; executionInput: unknown; permissionWaitMs?: number }
@@ -52,7 +53,10 @@ export async function resolveToolPermission(
   telemetry?: ToolExecutionSpanWriter,
 ): Promise<ToolPermissionFlowResult> {
   // Sando --deny-commands: checked before rules, hooks and modes, so yolo / headless runs cannot skip it, and never asks.
-  const denyRefusal = denyListRefusal(toolCall.name, executionInput, deps.getWorkingDirectory());
+  // Sando --sandbox refuses the in-process js tool the same way (core/tool/os-sandbox-policy.ts).
+  const denyRefusal =
+    denyListRefusal(toolCall.name, executionInput, deps.getWorkingDirectory()) ??
+    osSandboxToolRefusal(toolCall.name);
   if (denyRefusal) {
     telemetry?.setPermissionDecision("denied");
     await emitPermissionDenied(deps, toolCall, denyRefusal, traceContext);

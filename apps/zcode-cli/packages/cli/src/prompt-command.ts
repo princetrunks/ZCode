@@ -2,6 +2,7 @@ import { extname } from "node:path";
 import { formatJson, type PresentationSurface } from "@zcode/core";
 import type { RunContext, GlobalOptions } from "@zcode/shared-types";
 import { loadBootstrapModule } from "./bootstrap-loader.js";
+import { sandboxReportFields } from "./sandbox-report.js";
 import {
   buildManualSkillPrompt,
   createCommandCenter,
@@ -355,6 +356,7 @@ export const runPrompt = async (
           response,
           ...(multiTurn ? { turnResponses } : {}),
           ...(result.usage ? { usage: { ...result.usage } } : {}),
+          ...sandboxReportFields(),
           eventCount: result.events.length,
           projection: {
             status: result.projection.status,
@@ -377,6 +379,7 @@ export const runPrompt = async (
           response,
           ...(multiTurn ? { turnResponses } : {}),
           ...(result.usage ? { usage: { ...result.usage } } : {}),
+          ...sandboxReportFields(),
           eventCount: result.events.length,
           ...(hookTrustDiagnostic
             ? {
@@ -541,6 +544,7 @@ async function runPromptCommandCenterCommand(
         sessionId: String(app.sessionId),
         ...(nextTraceId ? { traceId: nextTraceId } : {}),
         response: result.response,
+        ...sandboxReportFields(),
       }),
     );
     return 0;

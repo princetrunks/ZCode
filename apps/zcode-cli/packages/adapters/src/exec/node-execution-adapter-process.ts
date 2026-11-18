@@ -1,4 +1,5 @@
 import { spawn, type ChildProcess, type StdioOptions } from "node:child_process";
+import { join } from "node:path";
 import { applyBashSourcesToExecutionRequest } from "./bash-startup-script.js";
 import { createBashResourceTelemetry } from "./bash-resource-telemetry.js";
 import { createCwdCapturePlan } from "./cwd-capture.js";
@@ -9,6 +10,14 @@ import {
   setResolvedShellLoginMode,
 } from "./execution-command.js";
 import { NodeExecutionAdapterResults } from "./node-execution-adapter-results.js";
+import {
+  describeOsSandbox,
+  osSandboxArgv,
+  osSandboxEnv,
+  osSandboxPaths,
+  osSandboxPrivateTmp,
+  selectOsSandbox,
+} from "./os-sandbox.js";
 import { createExecutionOutputStreamDecoder } from "./outputEncoding.js";
 import type { OutputCollector } from "./output-collector.js";
 import {
@@ -106,11 +115,14 @@ export class NodeExecutionAdapterProcess extends NodeExecutionAdapterResults {
       sessionId,
       shellDialect: resolvedCommand.cwdDialect,
     });
+    const osSandbox = request.sandbox?.os;
+    const sandboxTmp = osSandbox ? osSandboxPrivateTmp() : undefined;
     const capturePlan = createCwdCapturePlan(requestWithSources, {
       dialect: resolvedCommand.cwdDialect,
       platform: this.platform,
+      ...(sandboxTmp ? { captureDir: sandboxTmp } : {}),
     });
-    const command =
+    let command =
       capturePlan.command === requestWithSources.command
         ? requestWithSources.command.mode === "shell"
           ? applyResolvedShellCommand(resolvedShell, requestWithSources.command.command)
@@ -121,7 +133,34 @@ export class NodeExecutionAdapterProcess extends NodeExecutionAdapterResults {
             platform: this.platform,
             resolvedShell,
           });
-    const spawnEnv = command.envOverlay ? { ...env, ...command.envOverlay } : env;
+    let spawnEnv = command.envOverlay ? { ...env, ...command.envOverlay } : env;
+    let osSandboxRunner: PreparedChildSpawn["osSandboxRunner"];
+    if (osSandbox && sandboxTmp) {
+      // Sando --sandbox: wrap the shell in the OS sandbox. Fails closed: no usable runner = the command does not run.
+      const selection = selectOsSandbox();
+      if (selection.runner === "none") {
+        if (!osSandbox.allowUnconfined) {
+          throw new Error(
+            `Sando sandbox: no usable OS sandbox on this host (${describeOsSandbox(selection)}). The command did not run.`,
+          );
+        }
+      } else {
+        spawnEnv = osSandboxEnv(spawnEnv, sandboxTmp);
+        const paths = osSandboxPaths({
+          mode: osSandbox.mode,
+          workspaceRoot: osSandbox.workspaceRoot,
+          privateTmp: sandboxTmp,
+          env: spawnEnv,
+          extraReadOnly: [
+            ...(shellInitSnapshot ? [shellInitSnapshot.path] : []),
+            join(rootDir, "bash-startup", sessionId),
+          ],
+        });
+        const confined = osSandboxArgv(selection, paths, command.file, command.args);
+        command = { ...command, file: confined.file, args: confined.args, shell: false };
+        osSandboxRunner = selection.runner;
+      }
+    }
     const baseOptions = {
       cwd: request.cwd,
       detached: this.platform !== "win32",
@@ -140,6 +179,7 @@ export class NodeExecutionAdapterProcess extends NodeExecutionAdapterResults {
       cwdDialect: command.cwdDialect,
       cwdFilePath: capturePlan.cwdFilePath,
       spawnOptions: baseOptions,
+      ...(osSandboxRunner ? { osSandboxRunner } : {}),
     };
   }
 

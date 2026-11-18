@@ -19,13 +19,15 @@ export function createCwdCapturePlan(
   options: {
     dialect: ExecutionShellDialect;
     platform: NodeJS.Platform;
+    /** Sando OS sandbox: the confined shell can only write its private temp dir, so the cwd file goes there. */
+    captureDir?: string;
   },
 ): CwdCapturePlan {
   if (request.captureCwdAfterSuccess !== true || request.command.mode !== "shell") {
     return { command: request.command };
   }
 
-  const cwdCaptureDir = tmpdir();
+  const cwdCaptureDir = options.captureDir ?? tmpdir();
   mkdirSync(cwdCaptureDir, { recursive: true });
   const cwdFilePath = join(cwdCaptureDir, `zcode-${crypto.randomUUID()}-cwd`);
 
