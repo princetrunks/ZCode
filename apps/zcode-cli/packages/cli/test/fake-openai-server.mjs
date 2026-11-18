@@ -6,6 +6,7 @@
 // A function scenario gets ({ msgs, tools, lastTool }) and returns null (answer) or { name, args } (one tool call).
 // Reasoning e2e: a handler decision may carry `reasoning` (streamed as `reasoning_content` before the answer or
 // the tool calls); every request also keeps its raw `messages` array as `rawMessages`.
+// `toolDefs` keeps the request's full tool definitions (on-demand MCP e2e).
 // `state.realisticUsage` (compaction e2e): usage.prompt_tokens = request chars / 4 instead of a constant 10.
 import http from "node:http";
 
@@ -42,6 +43,7 @@ export function startFakeOpenAI() {
         model: j.model,
         toolCount: tools.length,
         tools,
+        toolDefs: j.tools || [],
         system,
         all,
         lastTool: lastTool ? text(lastTool) : null,

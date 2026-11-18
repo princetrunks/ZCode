@@ -40,6 +40,7 @@ import { recordToolUsageFromResult } from "./turn-tool-usage.js";
 import { recordBrowserTurnToolResult } from "../../repl/browser-turn-state.js";
 import { createRuntimeToolResultEntry } from "../../agent/message-history.js";
 import { commitTurnRequestEntries } from "./turn-output-token-continuation.js";
+import { noteOnDemandMcpToolCalls } from "./mcp-on-demand.js";
 export async function executeToolCallsForModelStep(
   this: AgentRuntimeInternal,
   state: RegularTurnLoopState,
@@ -57,6 +58,10 @@ export async function executeToolCallsForModelStep(
     throw new Error("Model-backed tool execution requires the loop Model");
   }
   const modelSelection = { providerId: model.providerId, modelId: model.modelId };
+  noteOnDemandMcpToolCalls(
+    this,
+    options.toolCalls.map((toolCall) => toolCall.name),
+  );
   const coreToolCalls: ToolCall[] = options.toolCalls.map((tc) => ({
     id: tc.id as ToolCallId,
     // Model step admission 已完成类型/ID 校验；这里保留可恢复的原始空白名称，

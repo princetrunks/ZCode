@@ -7,6 +7,12 @@ import {
 import { registerMcpTools, traceContextToLogContext } from "../deps.js";
 import type { McpConnectionSnapshot, McpServerConfig, TraceContext } from "../deps.js";
 import type { AgentRuntimeInternal } from "../internal.js";
+import {
+  createLoadToolsToolEntry,
+  isDeferrableMcpToolName,
+  mcpToolsModeFromEnv,
+  onDemandMcpState,
+} from "../../mcp/on-demand.js";
 
 const MCP_SESSION_OAUTH_AUTHORIZATION_TIMEOUT_MS = 15_000;
 
@@ -144,6 +150,7 @@ export async function initializeMcp(
       ),
     });
     if (registered.length > 0) {
+      registerLoadToolsIfOnDemand(this, registered, traceContext);
       this.invalidateToolCache();
     }
     this.logger?.info("MCP tools registered", {
@@ -165,4 +172,49 @@ export async function initializeMcp(
     });
   }
   this.mcpToolsRegistered = true;
+}
+
+// Sando SANDO_MCP_TOOLS=ondemand (SANDO-MCP-ONDEMAND.md): one load_tools tool lists the deferred MCP tools; the
+// provider request boundary (turn-loop, compact) hides those not loaded yet.
+function registerLoadToolsIfOnDemand(
+  runtime: AgentRuntimeInternal,
+  registered: readonly string[],
+  traceContext: TraceContext,
+): void {
+  if (mcpToolsModeFromEnv(process.env) !== "ondemand") return;
+  const catalog = registered
+    .filter(isDeferrableMcpToolName)
+    .map((name) => {
+      const metadata = runtime.registry.getMetadata(name);
+      return {
+        name,
+        description: metadata?.description,
+        serverName: metadata?.mcpPresentation?.serverName,
+        toolName: metadata?.mcpPresentation?.toolName,
+      };
+    });
+  if (catalog.length === 0) return;
+  runtime.registry.register(
+    createLoadToolsToolEntry({
+      catalog,
+      state: onDemandMcpState(runtime),
+      onLoad: (resolution) =>
+        runtime.logger?.info("MCP tools loaded on demand", {
+          ...traceContextToLogContext(traceContext),
+          event: "mcp.ondemand.load",
+          module: "core.runtime",
+          loaded: resolution.loaded,
+          alreadyLoaded: resolution.alreadyLoaded,
+          unknown: resolution.unknown.map((entry) => entry.name),
+          status: "completed",
+        }),
+    }),
+  );
+  runtime.logger?.info("MCP tools deferred", {
+    ...traceContextToLogContext(traceContext),
+    event: "mcp.ondemand.deferred",
+    module: "core.runtime",
+    deferredToolCount: catalog.length,
+    status: "completed",
+  });
 }
