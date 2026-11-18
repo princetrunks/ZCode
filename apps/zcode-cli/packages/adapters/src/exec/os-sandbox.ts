@@ -402,6 +402,19 @@ export function osSandboxArgv(
   };
 }
 
+// Credentials in the environment (HF_TOKEN, *_API_KEY, SSH_AUTH_SOCK...) do not enter the sandbox: with the network
+// closed they could only leak into the model's reply, and no sandboxed command can use them anyway.
+const SECRET_ENV_NAME =
+  /TOKEN|SECRET|PASSWORD|PASSWD|API_?KEY|ACCESS_?KEY|PRIVATE_?KEY|CREDENTIAL|AUTH/i;
+
+export function osSandboxEnv(env: NodeJS.ProcessEnv, privateTmpDir: string): NodeJS.ProcessEnv {
+  const out: NodeJS.ProcessEnv = {};
+  for (const [name, value] of Object.entries(env)) {
+    if (!SECRET_ENV_NAME.test(name)) out[name] = value;
+  }
+  return { ...out, TMPDIR: privateTmpDir, TMP: privateTmpDir, TEMP: privateTmpDir };
+}
+
 let privateTmp: string | undefined;
 
 /** One private temp dir per process (TMPDIR inside the sandbox; /tmp itself is not visible), removed at exit. */

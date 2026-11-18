@@ -13,6 +13,7 @@ import { NodeExecutionAdapterResults } from "./node-execution-adapter-results.js
 import {
   describeOsSandbox,
   osSandboxArgv,
+  osSandboxEnv,
   osSandboxPaths,
   osSandboxPrivateTmp,
   selectOsSandbox,
@@ -143,7 +144,7 @@ export class NodeExecutionAdapterProcess extends NodeExecutionAdapterResults {
           );
         }
       } else {
-        spawnEnv = { ...spawnEnv, TMPDIR: sandboxTmp, TMP: sandboxTmp, TEMP: sandboxTmp };
+        spawnEnv = osSandboxEnv(spawnEnv, sandboxTmp);
         const paths = osSandboxPaths({
           mode: osSandbox.mode,
           workspaceRoot: osSandbox.workspaceRoot,

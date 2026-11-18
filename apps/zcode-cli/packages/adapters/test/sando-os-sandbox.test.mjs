@@ -11,6 +11,7 @@ import {
   describeOsSandbox,
   OS_SANDBOX_LAUNCHER_SOURCE,
   osSandboxArgv,
+  osSandboxEnv,
   osSandboxPaths,
   selectOsSandbox,
 } from "../src/exec/os-sandbox.ts";
@@ -246,3 +247,30 @@ test(
     }
   },
 );
+
+test("env: credentials are dropped, TMPDIR points at the private temp dir, the rest passes", () => {
+  const env = osSandboxEnv(
+    {
+      PATH: "/usr/bin",
+      HOME: "/home/u",
+      HF_TOKEN: "x",
+      CIVITAI_API_KEY: "x",
+      OPENAI_APIKEY: "x",
+      AWS_SECRET_ACCESS_KEY: "x",
+      SSH_AUTH_SOCK: "/run/u/ssh",
+      GH_TOKEN: "x",
+      DB_PASSWORD: "x",
+      SANDO_PROMPT_PROFILE: "lean",
+      TMPDIR: "/tmp",
+    },
+    "/tmp/sando-sbx-1",
+  );
+  assert.deepEqual(env, {
+    PATH: "/usr/bin",
+    HOME: "/home/u",
+    SANDO_PROMPT_PROFILE: "lean",
+    TMPDIR: "/tmp/sando-sbx-1",
+    TMP: "/tmp/sando-sbx-1",
+    TEMP: "/tmp/sando-sbx-1",
+  });
+});

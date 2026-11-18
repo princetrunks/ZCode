@@ -13,6 +13,7 @@ export {
   describeOsSandbox,
   OS_SANDBOX_LAUNCHER_FAILURE_EXIT,
   osSandboxArgv,
+  osSandboxEnv,
   osSandboxPaths,
   osSandboxPrivateTmp,
   resetOsSandboxSelectionForTest,

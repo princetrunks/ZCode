@@ -224,6 +224,24 @@ test(
 );
 
 test(
+  "--sandbox: credentials in the environment do not reach the sandboxed shell",
+  { skip },
+  async () => {
+    const r = await sando(
+      ['echo "hf=[$HF_TOKEN] civ=[$CIVITAI_API_KEY] keep=[$KEEP_ME]"'],
+      ["--sandbox", "workspace-write"],
+      {
+        HF_TOKEN: "hf-canary-123",
+        CIVITAI_API_KEY: "civ-canary-456",
+        KEEP_ME: "kept",
+      },
+    );
+    assert.equal(r.status, 0, r.stderr);
+    assert.match(r.toolResults[0], /hf=\[\] civ=\[\] keep=\[kept\]/);
+  },
+);
+
+test(
   "control: without --sandbox the same commands get through (so the checks above would catch a leak)",
   { skip },
   async () => {
