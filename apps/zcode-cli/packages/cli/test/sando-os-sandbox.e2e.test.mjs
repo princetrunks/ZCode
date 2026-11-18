@@ -29,9 +29,18 @@ let tcpPort;
 // Landlock usable on this host? (Probe once with the same launcher the CLI uses: python3 + the landlock syscalls.)
 const hasLandlock =
   process.platform === "linux" &&
-  Number(spawnSync("python3", ["-c", "import ctypes;l=ctypes.CDLL(None);l.syscall.restype=ctypes.c_long;print(l.syscall(444,None,0,1))"], {
-    encoding: "utf8",
-  }).stdout?.trim()) >= 1;
+  Number(
+    spawnSync(
+      "python3",
+      [
+        "-c",
+        "import ctypes;l=ctypes.CDLL(None);l.syscall.restype=ctypes.c_long;print(l.syscall(444,None,0,1))",
+      ],
+      {
+        encoding: "utf8",
+      },
+    ).stdout?.trim(),
+  ) >= 1;
 const skip = hasLandlock ? false : "needs Linux with Landlock";
 
 const modelConfig = {
@@ -66,7 +75,10 @@ before(async () => {
               config: {
                 group: "standard-personal",
                 access: { type: "api-key", apiKey: "fake" },
-                api: { type: "openai-chat-completions", baseUrl: `http://127.0.0.1:${fake.port}/v1` },
+                api: {
+                  type: "openai-chat-completions",
+                  baseUrl: `http://127.0.0.1:${fake.port}/v1`,
+                },
                 personalModelIds: ["model-a"],
                 modelOrder: ["model-a"],
               },
@@ -75,7 +87,9 @@ before(async () => {
         },
         modelConfigRules: {
           providerModelRules: [],
-          manualProviderModelRules: [{ providerId: "fake-a", modelId: "model-a", config: modelConfig }],
+          manualProviderModelRules: [
+            { providerId: "fake-a", modelId: "model-a", config: modelConfig },
+          ],
         },
         defaultModelSelection: { providerId: "fake-a", modelId: "model-a" },
       },
@@ -121,18 +135,31 @@ async function sando(steps, args = [], env = {}) {
   fake.state.scenario = ({ msgs }) => {
     const step = steps[msgs.filter((m) => m.role === "tool").length];
     if (!step) return null;
-    return typeof step === "string" ? { name: "Bash", args: { command: step, description: "step" } } : step;
+    return typeof step === "string"
+      ? { name: "Bash", args: { command: step, description: "step" } }
+      : step;
   };
   const childEnv = { ...process.env, HOME: home, ...env };
   delete childEnv.NODE_TEST_CONTEXT; // the outer node --test would make the workspace's `node --test` skip its files
-  for (const k of ["ZCODE_MODEL", "ZCODE_CONFINE_TO_CWD", "SANDO_DENY_COMMANDS", "SANDO_SANDBOX", "SANDO_SANDBOX_WIDEN", "SANDO_SANDBOX_RUNNER"]) {
+  for (const k of [
+    "ZCODE_MODEL",
+    "ZCODE_CONFINE_TO_CWD",
+    "SANDO_DENY_COMMANDS",
+    "SANDO_SANDBOX",
+    "SANDO_SANDBOX_WIDEN",
+    "SANDO_SANDBOX_RUNNER",
+  ]) {
     if (!(k in env)) delete childEnv[k];
   }
-  const child = spawn(process.execPath, [CLI, "-p", "run the steps", "--mode", "yolo", "--json", ...args], {
-    cwd: ws,
-    env: childEnv,
-    timeout: 120_000,
-  });
+  const child = spawn(
+    process.execPath,
+    [CLI, "-p", "run the steps", "--mode", "yolo", "--json", ...args],
+    {
+      cwd: ws,
+      env: childEnv,
+      timeout: 120_000,
+    },
+  );
   let stdout = "";
   let stderr = "";
   child.stdout.on("data", (c) => (stdout += c));
@@ -159,64 +186,89 @@ const ATTACKS = () => [
   `python3 -c "import socket; s=socket.socket(socket.AF_UNIX); s.connect('${unixSock}'); print('UNIX-CONNECTED')"`,
 ];
 
-test("--sandbox workspace-write: ~/.ssh, writes outside the workspace and sockets are blocked", { skip }, async () => {
-  tcpHits = 0;
-  unixHits = 0;
-  const attacks = ATTACKS();
-  const r = await sando(attacks, ["--sandbox", "workspace-write"]);
-  assert.equal(r.status, 0, r.stderr);
-  assert.equal(r.toolResults.length, attacks.length);
-  const all = r.toolResults.join("\n");
-  assert.doesNotMatch(all, /SSH-KEY-SECRET|OUTSIDE-SECRET|TCP-CONNECTED|UNIX-CONNECTED/);
-  for (const [i, text] of r.toolResults.entries()) {
-    assert.match(text, /Permission denied|Operation not permitted|EACCES|EPERM/i, `step ${i + 1}: ${attacks[i]}\n${text}`);
-  }
-  assert.deepEqual(fs.readdirSync(outside), ["notes.txt"], "nothing was written outside the workspace");
-  assert.equal(tcpHits, 0, "no TCP connection reached the listener");
-  assert.equal(unixHits, 0, "no unix-socket connection reached the listener");
-  assert.match(r.toolResults[0], /Sando sandbox \(workspace-write\)/, "a denial carries the sandbox note");
-  assert.equal(r.json?.sandbox?.mode, "workspace-write");
-  assert.match(r.json?.sandbox?.runner ?? "", /^(landlock|bwrap)$/);
-  assert.equal(r.json?.sandbox?.enforcement, "full");
-});
+test(
+  "--sandbox workspace-write: ~/.ssh, writes outside the workspace and sockets are blocked",
+  { skip },
+  async () => {
+    tcpHits = 0;
+    unixHits = 0;
+    const attacks = ATTACKS();
+    const r = await sando(attacks, ["--sandbox", "workspace-write"]);
+    assert.equal(r.status, 0, r.stderr);
+    assert.equal(r.toolResults.length, attacks.length);
+    const all = r.toolResults.join("\n");
+    assert.doesNotMatch(all, /SSH-KEY-SECRET|OUTSIDE-SECRET|TCP-CONNECTED|UNIX-CONNECTED/);
+    for (const [i, text] of r.toolResults.entries()) {
+      assert.match(
+        text,
+        /Permission denied|Operation not permitted|EACCES|EPERM/i,
+        `step ${i + 1}: ${attacks[i]}\n${text}`,
+      );
+    }
+    assert.deepEqual(
+      fs.readdirSync(outside),
+      ["notes.txt"],
+      "nothing was written outside the workspace",
+    );
+    assert.equal(tcpHits, 0, "no TCP connection reached the listener");
+    assert.equal(unixHits, 0, "no unix-socket connection reached the listener");
+    assert.match(
+      r.toolResults[0],
+      /Sando sandbox \(workspace-write\)/,
+      "a denial carries the sandbox note",
+    );
+    assert.equal(r.json?.sandbox?.mode, "workspace-write");
+    assert.match(r.json?.sandbox?.runner ?? "", /^(landlock|bwrap)$/);
+    assert.equal(r.json?.sandbox?.enforcement, "full");
+  },
+);
 
-test("control: without --sandbox the same commands get through (so the checks above would catch a leak)", { skip }, async () => {
-  tcpHits = 0;
-  unixHits = 0;
-  const r = await sando(ATTACKS());
-  assert.equal(r.status, 0, r.stderr);
-  const all = r.toolResults.join("\n");
-  assert.match(all, /SSH-KEY-SECRET/);
-  assert.match(all, /TCP-CONNECTED/);
-  assert.match(all, /UNIX-CONNECTED/);
-  assert.ok(fs.existsSync(path.join(outside, "w1.txt")));
-  assert.equal(r.json?.sandbox, undefined);
-  for (const f of ["w1.txt", "w2.txt", "w3.txt"]) fs.rmSync(path.join(outside, f), { force: true });
-});
+test(
+  "control: without --sandbox the same commands get through (so the checks above would catch a leak)",
+  { skip },
+  async () => {
+    tcpHits = 0;
+    unixHits = 0;
+    const r = await sando(ATTACKS());
+    assert.equal(r.status, 0, r.stderr);
+    const all = r.toolResults.join("\n");
+    assert.match(all, /SSH-KEY-SECRET/);
+    assert.match(all, /TCP-CONNECTED/);
+    assert.match(all, /UNIX-CONNECTED/);
+    assert.ok(fs.existsSync(path.join(outside, "w1.txt")));
+    assert.equal(r.json?.sandbox, undefined);
+    for (const f of ["w1.txt", "w2.txt", "w3.txt"])
+      fs.rmSync(path.join(outside, f), { force: true });
+  },
+);
 
-test("--sandbox workspace-write: normal build and test commands in the workspace work", { skip }, async () => {
-  const r = await sando(
-    [
-      "echo built > out.txt && mkdir -p dist && cp add.js dist/ && cat out.txt",
-      "node --test 2>&1 | grep -E '(pass|fail) [0-9]'",
-      "git init -q && git add -A && git -c user.name=t -c user.email=t@t commit -qm init && git log --oneline | wc -l",
-      `python3 -c "import tempfile,os; f=tempfile.NamedTemporaryFile(delete=False); f.write(b'x'); print('TMP-OK', os.path.dirname(f.name) == os.environ['TMPDIR'])"`,
-      "cd dist && pwd",
-      "pwd",
-    ],
-    ["--sandbox", "workspace-write"],
-  );
-  assert.equal(r.status, 0, r.stderr);
-  const [build, tests, git, tmp, cdDist, pwd] = r.toolResults;
-  assert.match(build, /built/);
-  assert.match(tests, /pass 1/);
-  assert.match(tests, /fail 0/);
-  assert.match(git, /\b1\b/);
-  assert.match(tmp, /TMP-OK True/);
-  assert.match(cdDist, /\/dist\b/);
-  assert.match(pwd, /\/dist\b/, "the cwd carried over: the cwd capture works inside the sandbox");
-  assert.ok(fs.existsSync(path.join(ws, "dist", "add.js")));
-});
+test(
+  "--sandbox workspace-write: normal build and test commands in the workspace work",
+  { skip },
+  async () => {
+    const r = await sando(
+      [
+        "echo built > out.txt && mkdir -p dist && cp add.js dist/ && cat out.txt",
+        "node --test 2>&1 | grep -E '(pass|fail) [0-9]'",
+        "git init -q && git add -A && git -c user.name=t -c user.email=t@t commit -qm init && git log --oneline | wc -l",
+        `python3 -c "import tempfile,os; f=tempfile.NamedTemporaryFile(delete=False); f.write(b'x'); print('TMP-OK', os.path.dirname(f.name) == os.environ['TMPDIR'])"`,
+        "cd dist && pwd",
+        "pwd",
+      ],
+      ["--sandbox", "workspace-write"],
+    );
+    assert.equal(r.status, 0, r.stderr);
+    const [build, tests, git, tmp, cdDist, pwd] = r.toolResults;
+    assert.match(build, /built/);
+    assert.match(tests, /pass 1/);
+    assert.match(tests, /fail 0/);
+    assert.match(git, /\b1\b/);
+    assert.match(tmp, /TMP-OK True/);
+    assert.match(cdDist, /\/dist\b/);
+    assert.match(pwd, /\/dist\b/, "the cwd carried over: the cwd capture works inside the sandbox");
+    assert.ok(fs.existsSync(path.join(ws, "dist", "add.js")));
+  },
+);
 
 test("--sandbox read-only: the workspace is readable but not writable", { skip }, async () => {
   const r = await sando(["cat README.md", "echo x > ro.txt"], ["--sandbox", "read-only"]);
@@ -226,17 +278,23 @@ test("--sandbox read-only: the workspace is readable but not writable", { skip }
   assert.ok(!fs.existsSync(path.join(ws, "ro.txt")));
 });
 
-test("--sandbox: the file tools are confined to the workspace too (Read ~/.ssh refused)", { skip }, async () => {
-  const r = await sando(
-    [{ name: "Read", args: { file_path: path.join(home, ".ssh", "id_ed25519") } }],
-    ["--sandbox", "workspace-write"],
-  );
-  assert.equal(r.status, 0, r.stderr);
-  assert.doesNotMatch(r.toolResults[0], /SSH-KEY-SECRET/);
-});
+test(
+  "--sandbox: the file tools are confined to the workspace too (Read ~/.ssh refused)",
+  { skip },
+  async () => {
+    const r = await sando(
+      [{ name: "Read", args: { file_path: path.join(home, ".ssh", "id_ed25519") } }],
+      ["--sandbox", "workspace-write"],
+    );
+    assert.equal(r.status, 0, r.stderr);
+    assert.doesNotMatch(r.toolResults[0], /SSH-KEY-SECRET/);
+  },
+);
 
 test("no usable sandbox (unsupported kernel) = refuses to run before any model request", async () => {
-  const r = await sando(["echo hi"], ["--sandbox", "workspace-write"], { SANDO_SANDBOX_RUNNER: "none" });
+  const r = await sando(["echo hi"], ["--sandbox", "workspace-write"], {
+    SANDO_SANDBOX_RUNNER: "none",
+  });
   assert.notEqual(r.status, 0);
   assert.match(r.stderr, /no usable OS sandbox on this host/);
   assert.match(r.stderr, /--sandbox-widen unconfined/);
@@ -244,40 +302,58 @@ test("no usable sandbox (unsupported kernel) = refuses to run before any model r
 });
 
 test("no usable sandbox + --sandbox-widen unconfined = runs unconfined and says so in the JSON", async () => {
-  const r = await sando(["echo ran-unconfined"], ["--sandbox", "workspace-write", "--sandbox-widen", "unconfined"], {
-    SANDO_SANDBOX_RUNNER: "none",
-  });
+  const r = await sando(
+    ["echo ran-unconfined"],
+    ["--sandbox", "workspace-write", "--sandbox-widen", "unconfined"],
+    {
+      SANDO_SANDBOX_RUNNER: "none",
+    },
+  );
   assert.equal(r.status, 0, r.stderr);
   assert.match(r.toolResults[0], /ran-unconfined/);
-  assert.deepEqual(r.json?.sandbox, { mode: "workspace-write", runner: "none", enforcement: "none", widen: "unconfined" });
-});
-
-test("one approved widening: --sandbox-widen one-call lets ONE dangerouslyDisableSandbox call out; others are refused", { skip }, async () => {
-  const unsandboxed = (file) => ({
-    name: "Bash",
-    args: { command: `echo w > ${outside}/${file}`, description: "outside", dangerouslyDisableSandbox: true },
+  assert.deepEqual(r.json?.sandbox, {
+    mode: "workspace-write",
+    runner: "none",
+    enforcement: "none",
+    widen: "unconfined",
   });
-  const refused = await sando([unsandboxed("nope.txt")], ["--sandbox", "workspace-write"]);
-  assert.equal(refused.status, 0, refused.stderr);
-  assert.match(refused.toolResults[0], /was not approved for this run/);
-  assert.ok(!fs.existsSync(path.join(outside, "nope.txt")));
-
-  const r = await sando([unsandboxed("one.txt"), unsandboxed("two.txt")], [
-    "--sandbox",
-    "workspace-write",
-    "--sandbox-widen",
-    "one-call",
-  ]);
-  assert.equal(r.status, 0, r.stderr);
-  assert.match(r.toolResults[0], /ran unsandboxed, as the one approved widening/);
-  assert.match(r.toolResults[1], /already used/);
-  assert.ok(fs.existsSync(path.join(outside, "one.txt")));
-  assert.ok(!fs.existsSync(path.join(outside, "two.txt")));
-  fs.rmSync(path.join(outside, "one.txt"), { force: true });
 });
+
+test(
+  "one approved widening: --sandbox-widen one-call lets ONE dangerouslyDisableSandbox call out; others are refused",
+  { skip },
+  async () => {
+    const unsandboxed = (file) => ({
+      name: "Bash",
+      args: {
+        command: `echo w > ${outside}/${file}`,
+        description: "outside",
+        dangerouslyDisableSandbox: true,
+      },
+    });
+    const refused = await sando([unsandboxed("nope.txt")], ["--sandbox", "workspace-write"]);
+    assert.equal(refused.status, 0, refused.stderr);
+    assert.match(refused.toolResults[0], /was not approved for this run/);
+    assert.ok(!fs.existsSync(path.join(outside, "nope.txt")));
+
+    const r = await sando(
+      [unsandboxed("one.txt"), unsandboxed("two.txt")],
+      ["--sandbox", "workspace-write", "--sandbox-widen", "one-call"],
+    );
+    assert.equal(r.status, 0, r.stderr);
+    assert.match(r.toolResults[0], /ran unsandboxed, as the one approved widening/);
+    assert.match(r.toolResults[1], /already used/);
+    assert.ok(fs.existsSync(path.join(outside, "one.txt")));
+    assert.ok(!fs.existsSync(path.join(outside, "two.txt")));
+    fs.rmSync(path.join(outside, "one.txt"), { force: true });
+  },
+);
 
 test("bad --sandbox / --sandbox-widen values fail before any model request", async () => {
-  for (const args of [["--sandbox", "maybe"], ["--sandbox", "workspace-write", "--sandbox-widen", "always"]]) {
+  for (const args of [
+    ["--sandbox", "maybe"],
+    ["--sandbox", "workspace-write", "--sandbox-widen", "always"],
+  ]) {
     const r = await sando(["echo hi"], args);
     assert.equal(r.status, 1, args.join(" "));
     assert.match(r.stderr, /--sandbox(-widen)?: /);

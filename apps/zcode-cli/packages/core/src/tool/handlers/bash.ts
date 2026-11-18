@@ -243,8 +243,9 @@ async function executeBashHandler(
         ? osSandboxDenialNote(osSandbox.mode, result)
         : undefined;
   const stderrSuffix =
-    [cwdDecision.stderrSuffix, sandboxNote].filter((part): part is string => Boolean(part)).join("\n") ||
-    undefined;
+    [cwdDecision.stderrSuffix, sandboxNote]
+      .filter((part): part is string => Boolean(part))
+      .join("\n") || undefined;
   const output = await toBashOutput(result, parsed, context, {
     progressTiming,
     stderrSuffix,

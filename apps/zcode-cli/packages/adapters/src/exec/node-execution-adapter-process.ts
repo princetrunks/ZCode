@@ -149,7 +149,10 @@ export class NodeExecutionAdapterProcess extends NodeExecutionAdapterResults {
           workspaceRoot: osSandbox.workspaceRoot,
           privateTmp: sandboxTmp,
           env: spawnEnv,
-          extraReadOnly: [join(rootDir, "shell-snapshots"), join(rootDir, "bash-startup", sessionId)],
+          extraReadOnly: [
+            join(rootDir, "shell-snapshots"),
+            join(rootDir, "bash-startup", sessionId),
+          ],
         });
         const confined = osSandboxArgv(selection, paths, command.file, command.args);
         command = { ...command, file: confined.file, args: confined.args, shell: false };

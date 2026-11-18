@@ -143,7 +143,12 @@ export type OsSandboxMode = "workspace-write" | "read-only";
 export type OsSandboxRunner = "bwrap" | "landlock";
 export type OsSandboxEnforcement = "full" | "partial";
 export type OsSandboxSelection =
-  | { runner: OsSandboxRunner; enforcement: OsSandboxEnforcement; program: string; landlockAbi?: number }
+  | {
+      runner: OsSandboxRunner;
+      enforcement: OsSandboxEnforcement;
+      program: string;
+      landlockAbi?: number;
+    }
   | { runner: "none"; reasons: string[] };
 
 export const OS_SANDBOX_LAUNCHER_FAILURE_EXIT = 125;
@@ -185,7 +190,10 @@ function walkChain(probes: OsSandboxProbes): OsSandboxSelection {
   const forced = env[OS_SANDBOX_RUNNER_ENV]?.trim().toLowerCase();
   if (forced === "none") return { runner: "none", reasons: [`${OS_SANDBOX_RUNNER_ENV}=none`] };
   if (forced && forced !== "bwrap" && forced !== "landlock") {
-    return { runner: "none", reasons: [`${OS_SANDBOX_RUNNER_ENV} expects bwrap, landlock or none, got "${forced}"`] };
+    return {
+      runner: "none",
+      reasons: [`${OS_SANDBOX_RUNNER_ENV} expects bwrap, landlock or none, got "${forced}"`],
+    };
   }
   const reasons: string[] = [];
   if (!forced || forced === "bwrap") {
@@ -198,7 +206,12 @@ function walkChain(probes: OsSandboxProbes): OsSandboxSelection {
     const program = findProgram("python3", env);
     const verdict = !program ? "python3 not found" : (probes.landlock ?? probeLandlock)(program);
     if (typeof verdict !== "string" && program) {
-      return { runner: "landlock", enforcement: verdict.enforcement, program, landlockAbi: verdict.abi };
+      return {
+        runner: "landlock",
+        enforcement: verdict.enforcement,
+        program,
+        landlockAbi: verdict.abi,
+      };
     }
     reasons.push(`landlock: ${String(verdict)}`);
   }
@@ -223,7 +236,12 @@ function firstLine(text: string | undefined): string {
 function probeBwrap(program: string): true | string {
   const probeTmp = mkdtempSync(join(tmpdir(), "sando-sbx-probe-"));
   try {
-    const paths = osSandboxPaths({ mode: "read-only", workspaceRoot: probeTmp, privateTmp: probeTmp, env: {} });
+    const paths = osSandboxPaths({
+      mode: "read-only",
+      workspaceRoot: probeTmp,
+      privateTmp: probeTmp,
+      env: {},
+    });
     const result = spawnSync(program, [...bwrapProfileArgs(paths), "--", "/bin/true"], {
       timeout: PROBE_TIMEOUT_MS,
       encoding: "utf8",
@@ -234,14 +252,18 @@ function probeBwrap(program: string): true | string {
   }
 }
 
-function probeLandlock(program: string): { abi: number; enforcement: OsSandboxEnforcement } | string {
+function probeLandlock(
+  program: string,
+): { abi: number; enforcement: OsSandboxEnforcement } | string {
   const result = spawnSync(program, ["-I", "-S", "-c", OS_SANDBOX_LAUNCHER_SOURCE, "--probe"], {
     timeout: PROBE_TIMEOUT_MS,
     encoding: "utf8",
   });
   const match = /landlock-abi=(\d+) enforcement=(full|partial)/.exec(result.stdout ?? "");
   if (result.status !== 0 || !match) {
-    return firstLine((result.stderr || result.error?.message || "").replace(/^sando-confine: /, ""));
+    return firstLine(
+      (result.stderr || result.error?.message || "").replace(/^sando-confine: /, ""),
+    );
   }
   return { abi: Number(match[1]), enforcement: match[2] as OsSandboxEnforcement };
 }
@@ -256,15 +278,43 @@ export interface OsSandboxPaths {
 }
 
 const SYSTEM_READ_ONLY = [
-  "/usr", "/bin", "/sbin", "/lib", "/lib32", "/lib64", "/libx32", "/etc", "/opt", "/sys", "/proc",
-  "/dev/urandom", "/dev/random", "/dev/zero", "/dev/full",
+  "/usr",
+  "/bin",
+  "/sbin",
+  "/lib",
+  "/lib32",
+  "/lib64",
+  "/libx32",
+  "/etc",
+  "/opt",
+  "/sys",
+  "/proc",
+  "/dev/urandom",
+  "/dev/random",
+  "/dev/zero",
+  "/dev/full",
 ];
 const DEVICES_READ_WRITE = ["/dev/null", "/dev/tty"];
 // Toolchains and tool config under $HOME, read-only. Credentials ($HOME/.ssh, .npmrc, .netrc, .config/gh, .aws, the
 // vault...) and the rest of $HOME stay invisible.
 const HOME_READ_ONLY = [
-  ".gitconfig", ".config/git", ".local/bin", ".local/share/mise", ".config/mise", ".local/state/mise", ".cache/mise",
-  ".npm-global", ".cargo/bin", ".rustup", ".pyenv", ".nvm", ".volta", ".bun/bin", ".deno/bin", "go/bin", ".local/go",
+  ".gitconfig",
+  ".config/git",
+  ".local/bin",
+  ".local/share/mise",
+  ".config/mise",
+  ".local/state/mise",
+  ".cache/mise",
+  ".npm-global",
+  ".cargo/bin",
+  ".rustup",
+  ".pyenv",
+  ".nvm",
+  ".volta",
+  ".bun/bin",
+  ".deno/bin",
+  "go/bin",
+  ".local/go",
 ];
 
 /**
@@ -281,7 +331,9 @@ export function osSandboxPaths(options: {
   home?: string;
 }): OsSandboxPaths {
   const home = options.home ?? homedir();
-  const pathEntries = (options.env.PATH ?? "").split(delimiter).filter((dir) => dir && isAbsolute(dir));
+  const pathEntries = (options.env.PATH ?? "")
+    .split(delimiter)
+    .filter((dir) => dir && isAbsolute(dir));
   const readOnly = [
     ...SYSTEM_READ_ONLY,
     ...HOME_READ_ONLY.map((rel) => join(home, rel)),
@@ -313,9 +365,12 @@ export function bwrapProfileArgs(paths: OsSandboxPaths): string[] {
     "--die-with-parent",
     "--unshare-all",
     "--new-session",
-    "--proc", "/proc",
-    "--dev", "/dev",
-    "--tmpfs", "/tmp",
+    "--proc",
+    "/proc",
+    "--dev",
+    "/dev",
+    "--tmpfs",
+    "/tmp",
     ...paths.readOnly.filter((p) => !skip(p)).flatMap((p) => ["--ro-bind-try", realOrSelf(p), p]),
     ...paths.readWrite.filter((p) => !skip(p)).flatMap((p) => ["--bind-try", realOrSelf(p), p]),
   ];
@@ -334,10 +389,15 @@ export function osSandboxArgv(
   return {
     file: selection.program,
     args: [
-      "-I", "-S", "-c", OS_SANDBOX_LAUNCHER_SOURCE,
+      "-I",
+      "-S",
+      "-c",
+      OS_SANDBOX_LAUNCHER_SOURCE,
       ...paths.readOnly.flatMap((p) => ["--ro", p]),
       ...paths.readWrite.flatMap((p) => ["--rw", p]),
-      "--", file, ...args,
+      "--",
+      file,
+      ...args,
     ],
   };
 }

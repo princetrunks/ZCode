@@ -19,14 +19,18 @@ export function osSandboxSettingFromEnv(env: NodeJS.ProcessEnv = process.env): O
   if (!value || value === "off" || value === "none") return "off";
   if (value === "workspace-write" || value === "on") return "workspace-write";
   if (value === "read-only") return "read-only";
-  throw new Error(`${SANDBOX_ENV} expects off, workspace-write or read-only, got "${env[SANDBOX_ENV]}"`);
+  throw new Error(
+    `${SANDBOX_ENV} expects off, workspace-write or read-only, got "${env[SANDBOX_ENV]}"`,
+  );
 }
 
 export function osSandboxWidenFromEnv(env: NodeJS.ProcessEnv = process.env): OsSandboxWiden {
   const value = env[SANDBOX_WIDEN_ENV]?.trim().toLowerCase();
   if (!value || value === "none") return "none";
   if (value === "one-call" || value === "unconfined") return value;
-  throw new Error(`${SANDBOX_WIDEN_ENV} expects one-call or unconfined, got "${env[SANDBOX_WIDEN_ENV]}"`);
+  throw new Error(
+    `${SANDBOX_WIDEN_ENV} expects one-call or unconfined, got "${env[SANDBOX_WIDEN_ENV]}"`,
+  );
 }
 
 /** Fail closed: a bad value counts as on, so the tools refuse instead of running unconfined. */
@@ -41,7 +45,10 @@ export function isOsSandboxOn(env: NodeJS.ProcessEnv = process.env): boolean {
 const IN_PROCESS_CODE_TOOLS = new Set(["js"]);
 
 /** Refusal for tools the OS sandbox cannot confine, or null. */
-export function osSandboxToolRefusal(toolName: string, env: NodeJS.ProcessEnv = process.env): string | null {
+export function osSandboxToolRefusal(
+  toolName: string,
+  env: NodeJS.ProcessEnv = process.env,
+): string | null {
   if (!IN_PROCESS_CODE_TOOLS.has(toolName) || !isOsSandboxOn(env)) return null;
   return `Refused (--sandbox): the ${toolName} tool runs inside Sando's own process, outside the OS sandbox, so it is off in this run. Use Bash.`;
 }
@@ -54,7 +61,14 @@ export function resetOsSandboxWideningForTest(): void {
 
 export type OsSandboxBashDecision =
   | { kind: "unsandboxed" }
-  | { kind: "confined"; os: { mode: "workspace-write" | "read-only"; workspaceRoot: string; allowUnconfined?: boolean } }
+  | {
+      kind: "confined";
+      os: {
+        mode: "workspace-write" | "read-only";
+        workspaceRoot: string;
+        allowUnconfined?: boolean;
+      };
+    }
   | { kind: "widened" }
   | { kind: "refused"; message: string };
 
@@ -70,7 +84,10 @@ export function decideOsSandboxForBash(
     setting = osSandboxSettingFromEnv(env);
     widen = osSandboxWidenFromEnv(env);
   } catch (error) {
-    return { kind: "refused", message: `Refused (--sandbox): ${error instanceof Error ? error.message : String(error)}.` };
+    return {
+      kind: "refused",
+      message: `Refused (--sandbox): ${error instanceof Error ? error.message : String(error)}.`,
+    };
   }
   if (setting === "off") return { kind: "unsandboxed" };
   if (input.dangerouslyDisableSandbox === true) {
