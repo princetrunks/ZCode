@@ -73,6 +73,8 @@ export const parseGlobalArgs = (argv: string[]) =>
       "max-turns": { type: "string" },
       "confine-to-cwd": { type: "boolean" },
       "deny-commands": { type: "string" },
+      sandbox: { type: "string" },
+      "sandbox-widen": { type: "string" },
       verbose: {
         type: "boolean",
       },

@@ -5,6 +5,7 @@
 import { realpathSync } from "node:fs";
 import { dirname, isAbsolute, normalize, relative, resolve, sep } from "node:path";
 import { CoreErrorType, createCoreError } from "@zcode/contracts";
+import { isOsSandboxOn } from "./os-sandbox-policy.js";
 
 interface ToolWorkspacePathOptions {
   inputPath: string;
@@ -57,6 +58,8 @@ export function resolveWorkspacePath(options: ToolWorkspacePathOptions): string 
 export const CONFINE_TO_CWD_ENV = "ZCODE_CONFINE_TO_CWD";
 
 export function isConfinedToWorkspace(env: NodeJS.ProcessEnv = process.env): boolean {
+  // Sando --sandbox implies --confine-to-cwd: the file tools run in Sando's own process, outside the OS sandbox.
+  if (isOsSandboxOn(env)) return true;
   const value = env[CONFINE_TO_CWD_ENV]?.trim().toLowerCase();
   return value === "1" || value === "true" || value === "yes";
 }

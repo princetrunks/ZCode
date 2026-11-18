@@ -5,10 +5,21 @@
 //   --confine-to-cwd             file tools refuse paths outside the workspace (+ harness dir) → ZCODE_CONFINE_TO_CWD
 //   --deny-commands <json file>  Bash commands matching a pattern are refused before they run → SANDO_DENY_COMMANDS (JSON)
 //                                (core/tool/handlers/bash-deny-list.ts; read and checked once, here)
+//   --sandbox <mode>             Bash runs in the OS sandbox: workspace-write | read-only | off  → SANDO_SANDBOX
+//   --sandbox-widen <w>          one-call (one unsandboxed Bash call) | unconfined (run without a usable sandbox)
+//                                                                                              → SANDO_SANDBOX_WIDEN
+//                                (core/tool/os-sandbox-policy.ts, adapters/exec/os-sandbox.ts; SANDO-OS-SANDBOX.md)
 // The runtime runs in-process and reads these from the env, so they reach bootstrap, adapters and core tools alike.
 import { statSync } from "node:fs";
 import { resolve } from "node:path";
-import { DENY_COMMANDS_ENV, readDenyListFile } from "@zcode/core";
+import {
+  DENY_COMMANDS_ENV,
+  osSandboxSettingFromEnv,
+  osSandboxWidenFromEnv,
+  readDenyListFile,
+  SANDBOX_ENV,
+  SANDBOX_WIDEN_ENV,
+} from "@zcode/core";
 
 export interface SandoRunFlagValues {
   model?: string | boolean;
@@ -16,6 +27,8 @@ export interface SandoRunFlagValues {
   "max-turns"?: string | boolean;
   "confine-to-cwd"?: string | boolean;
   "deny-commands"?: string | boolean;
+  sandbox?: string | boolean;
+  "sandbox-widen"?: string | boolean;
 }
 
 /** Returns the env entries to set, or an error message for a bad value. */
@@ -59,6 +72,19 @@ export function resolveSandoRunFlags(
     } catch (error) {
       return { error: `--deny-commands: ${file}: ${error instanceof Error ? error.message : String(error)}` };
     }
+  }
+  for (const [flag, key, parse] of [
+    ["sandbox", SANDBOX_ENV, osSandboxSettingFromEnv],
+    ["sandbox-widen", SANDBOX_WIDEN_ENV, osSandboxWidenFromEnv],
+  ] as const) {
+    const value = values[flag];
+    if (typeof value !== "string") continue;
+    try {
+      parse({ [key]: value });
+    } catch (error) {
+      return { error: `--${flag}: ${error instanceof Error ? error.message : String(error)}` };
+    }
+    env[key] = value.trim();
   }
   return { env };
 }

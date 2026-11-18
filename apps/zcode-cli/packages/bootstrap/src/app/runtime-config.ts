@@ -1,4 +1,5 @@
 import type { ConfigResult } from "@zcode/adapters/config";
+import { describeOsSandbox, selectOsSandbox } from "@zcode/adapters/exec";
 import {
   completeNewModelSelection,
   resolveInitialModelSelection,
@@ -12,6 +13,8 @@ import {
   toolResultPrunerEnabledFromEnv,
   leanSmallestEditFromEnv,
   mcpToolsModeFromEnv,
+  osSandboxSettingFromEnv,
+  osSandboxWidenFromEnv,
   type AgentProfile,
   type AgentRuntimeConfig,
 } from "@zcode/core";
@@ -297,6 +300,7 @@ function resolvePromptProfile(options: ZCodeAppOptions): Pick<AgentRuntimeConfig
   compactHeadroomModeFromEnv(options.env ?? process.env);
   leanSmallestEditFromEnv(options.env ?? process.env);
   mcpToolsModeFromEnv(options.env ?? process.env);
+  assertOsSandboxUsable(options.env ?? process.env);
   const promptProfile =
     options.runtimeConfig?.promptProfile ??
     parsePromptProfileSetting((options.env ?? process.env).SANDO_PROMPT_PROFILE);
@@ -396,4 +400,21 @@ export function runtimeConfigLogContext(
     runtimeFeatureNodeRepl: runtimeConfig.runtimeFeatures?.nodeRepl === true,
     workingDirectory,
   };
+}
+
+/**
+ * Sando --sandbox (SANDO-OS-SANDBOX.md): probe the runner chain at startup and fail closed. No usable runner = the run
+ * stops here, before any model request, unless --sandbox-widen unconfined (SANDO_SANDBOX_WIDEN=unconfined) is set.
+ */
+function assertOsSandboxUsable(env: NodeJS.ProcessEnv): void {
+  const setting = osSandboxSettingFromEnv(env);
+  const widen = osSandboxWidenFromEnv(env);
+  if (setting === "off") return;
+  const selection = selectOsSandbox();
+  if (selection.runner === "none" && widen !== "unconfined") {
+    throw new Error(
+      `--sandbox ${setting}: no usable OS sandbox on this host: ${describeOsSandbox(selection)}. ` +
+        "Sando refuses to run unconfined. --sandbox-widen unconfined (SANDO_SANDBOX_WIDEN=unconfined) runs without one.",
+    );
+  }
 }
